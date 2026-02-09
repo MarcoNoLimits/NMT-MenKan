@@ -1,0 +1,21 @@
+# Build Headers
+/build/
+/build_log.txt
+/release_log.txt
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.ups
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+
+# Dependencies
+/cmake/ctranslate2-src
+/cmake/sentencepiece-src
+
+/nllb_int8
