@@ -1,46 +1,38 @@
+#include <consoleapi2.h>
 #include <iostream>
-#include <cstdlib> // For _putenv
+#include <chrono> // For timing
+#include <winnls.h>
 #include "NMT/NMTWrapper.h"
 
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
 int main() {
-    // --- 1. FIX THE CRASH (BLAS Memory Error) ---
-    // Force OpenBLAS to use 1 thread. CTranslate2 handles the parallelism.
-    // If we let OpenBLAS spawn threads too, it conflicts on Windows and crashes.
-    _putenv("OPENBLAS_NUM_THREADS=1");
+    //_putenv("OPENBLAS_NUM_THREADS=1");
 
-    // --- 2. FIX THE WEIRD TEXT (Encoding) ---
-    // Force Windows Console to accept UTF-8 (so Emojis and Turkish chars work)
+    // Force UTF-8 for Turkish characters
     #ifdef _WIN32
     SetConsoleOutputCP(CP_UTF8);
     #endif
-
-    // NOTE: Ensure these paths are correct relative to where you run the .exe
-    std::string model_path = "nllb_int8"; 
-    std::string sp_model_path = "sentencepiece.bpe.model";
-
-    std::cout << "🚀 Initializing NMT-MenKan Engine..." << std::endl;
     
-    try {
-        NMT::NMTWrapper engine(model_path, sp_model_path);
-        
-        std::string input = "Hello, this is a test for the HoloLens project.";
-        std::cout << "en In: " << input << std::endl;
+    // Start Timer
+    auto start = std::chrono::high_resolution_clock::now();
 
-        std::string output = engine.translate(input);
-        std::cout << "tr Out: " << output << std::endl;
-    }
-    catch (const std::exception& e) {
-        std::cerr << "🔥 Crash: " << e.what() << std::endl;
-        return 1;
-    }
+    std::cout << "⏳ Loading Model..." << std::endl;
+    NMT::NMTWrapper engine("nllb_int8", "sentencepiece.bpe.model");
+    
+    // Stop Timer (Load Time)
+    auto load_end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> load_duration = load_end - start;
+    std::cout << "✅ Model Loaded in: " << load_duration.count() << " seconds." << std::endl;
 
-    // Keep terminal open if running from double-click
-    std::cout << "\n(Press Enter to exit)";
+    // Translate
+    std::string input = "Hello, this is a test for the hololens project.";
+    auto trans_start = std::chrono::high_resolution_clock::now();
+    std::string output = engine.translate(input);
+    auto trans_end = std::chrono::high_resolution_clock::now();
+    
+    std::chrono::duration<double> trans_duration = trans_end - trans_start;
+    std::cout << "⚡ Translation took: " << trans_duration.count() << " seconds." << std::endl;
+    std::cout << "🇹🇷 Output: " << output << std::endl;
+
     std::cin.get();
-
     return 0;
 }

@@ -13,7 +13,6 @@ namespace NMT {
 
         Impl(const std::string& model_path, const std::string& tokenizer_path) {
             // 1. Load the Translator (NLLB Int8)
-            // We use CPU because we are on HoloLens/Laptop without CUDA
             translator = std::make_unique<ctranslate2::Translator>(
                 model_path, 
                 ctranslate2::Device::CPU
@@ -34,25 +33,28 @@ namespace NMT {
             std::vector<std::string> tokens;
             sp_processor->Encode(english_text, &tokens);
 
-            // NLLB Specific: We might need to handle source lang tags here depending on training
-            // For standard NLLB, we usually just input tokens.
-            // But strict NLLB often wants: "sentence </s> eng_Latn"
-            // For now, let's try raw tokens. If accuracy is low, we append "eng_Latn".
+            // --- THE FIX: ADD SOURCE LANGUAGE TAGS ---
+            // NLLB *requires* the input to end with "</s>" and the source language code.
+            // If we miss this, the model hallucinates (Holo Holo Holo...)
+            tokens.push_back("</s>");
+            tokens.push_back("eng_Latn");
 
             std::vector<std::vector<std::string>> batch_input = { tokens };
 
             // --- B. SET OPTIONS ---
             ctranslate2::TranslationOptions options;
-            options.beam_size = 2; // Low beam size for speed on HoloLens
             
-            // --- C. DEFINE TARGET PREFIX (The Fix!) ---
-            // Instead of options.target_prefix, we pass it as an argument.
-            // "tur_Latn" tells NLLB to translate to Turkish.
+            // SPEED HACK: Change 2 to 1 (Greedy Search)
+            // Beam search (2) is slightly better quality but 2x slower.
+            // Greedy (1) is standard for real-time subtitles.
+            options.beam_size = 1;
+            
+            // --- C. DEFINE TARGET PREFIX ---
+            // This tells the model: "Start generating in Turkish"
             std::vector<std::string> target_prefix = { "tur_Latn" };
             std::vector<std::vector<std::string>> batch_target_prefix = { target_prefix };
 
             // --- D. TRANSLATE ---
-            // Signature: translate_batch(source, target_prefix, options)
             ctranslate2::TranslationResult result = translator->translate_batch(
                 batch_input, 
                 batch_target_prefix, 
@@ -64,11 +66,15 @@ namespace NMT {
             sp_processor->Decode(result.output(), &turkish_text);
 
             // --- F. CLEANUP (Remove the 'tur_Latn' tag) ---
-            // NLLB outputs "tur_Latn Translation...", so we remove the first 9 chars
-            // if the string starts with the tag.
-            std::string tag = "tur_Latn ";
-            if (turkish_text.rfind(tag, 0) == 0) { // Check if starts with tag
-                turkish_text.erase(0, tag.length());
+            std::string tag = "tur_Latn";
+            // Check if text starts with tag (handling potential spaces)
+            if (turkish_text.find(tag) == 0) { 
+                 // Remove tag + any following space
+                 size_t remove_len = tag.length();
+                 if (turkish_text.length() > remove_len && turkish_text[remove_len] == ' ') {
+                     remove_len++;
+                 }
+                 turkish_text.erase(0, remove_len);
             }
 
             return turkish_text;
