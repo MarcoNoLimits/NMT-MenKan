@@ -58,6 +58,7 @@ add_executable(NMT_MenKan
 target_include_directories(NMT_MenKan PRIVATE 
     "${CMAKE_SOURCE_DIR}/src"
     "${CMAKE_SOURCE_DIR}/include"
+    "${CMAKE_SOURCE_DIR}/include/NMT"
     "${sentencepiece_SOURCE_DIR}/src" # <--- Adds path to sentencepiece_processor.h
 )
 
@@ -77,6 +78,7 @@ target_link_libraries(NMT_MenKan
     absl::flags_parse
     
     OpenBLAS::OpenBLAS
+    Ws2_32
 )
 
 if(MSVC)
