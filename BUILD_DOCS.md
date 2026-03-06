@@ -6,7 +6,7 @@
 ---
 
 ## 1. Project Overview
-This project implements a standalone Offline Neural Machine Translation (NMT) engine using C++. It is designed to run the **NLLB-200** model to translate English speech to Turkish text for the Yeelen-Link accessibility glasses.
+This project implements a standalone Offline Neural Machine Translation (NMT) engine using C++. It is designed to run the **NLLB-200** model to translate English speech to Italian text for the MenKan accessibility glasses.
 
 ### Key Architecture Decisions
 * **No Python Dependency:** The engine is pure C++, allowing it to run on embedded/restricted systems (like HoloLens UWP) where Python is not supported.
@@ -168,7 +168,7 @@ namespace NMT {
     };
 }
 C. src/NMT/NMTWrapper.cpp (The Logic)
-Handles loading the model, tokenizing input, running inference, and cleaning up the output (removing tur_Latn tags).
+Handles loading the model, tokenizing input, running inference, and cleaning up the output (removing ita_Latn tags).
 
 C++
 #include "NMT/NMTWrapper.h"
@@ -204,7 +204,7 @@ namespace NMT {
             // 2. Setup Options
             ctranslate2::TranslationOptions options;
             options.beam_size = 2; // Fast speed
-            std::vector<std::string> target_prefix = { "tur_Latn" }; // Target Language
+            std::vector<std::string> target_prefix = { "ita_Latn" }; // Target Language
             std::vector<std::vector<std::string>> batch_target_prefix = { target_prefix };
 
             // 3. Translate
@@ -213,15 +213,15 @@ namespace NMT {
             )[0];
 
             // 4. Detokenize
-            std::string turkish_text;
-            sp_processor->Decode(result.output(), &turkish_text);
+            std::string italian_text;
+            sp_processor->Decode(result.output(), &italian_text);
 
-            // 5. Cleanup Tag (Remove 'tur_Latn')
-            std::string tag = "tur_Latn ";
-            if (turkish_text.rfind(tag, 0) == 0) {
-                turkish_text.erase(0, tag.length());
+            // 5. Cleanup Tag (Remove 'ita_Latn')
+            std::string tag = "ita_Latn ";
+            if (italian_text.rfind(tag, 0) == 0) {
+                italian_text.erase(0, tag.length());
             }
-            return turkish_text;
+            return italian_text;
         }
     };
 
@@ -230,7 +230,7 @@ namespace NMT {
     std::string NMTWrapper::translate(const std::string& text) { return impl->translate(text); }
 }
 D. src/main.cpp (The Runner)
-Includes critical fixes for UTF-8 encoding (so Turkish characters show up) and Threading (prevents OpenBLAS memory crash).
+Includes critical fixes for UTF-8 encoding (so Italian characters show up) and Threading (prevents OpenBLAS memory crash).
 
 C++
 #include <iostream>
@@ -260,7 +260,7 @@ int main() {
         std::string input = "Hello, this is a test for the HoloLens project.";
         std::cout << "🇬🇧 In: " << input << std::endl;
         std::string output = engine.translate(input);
-        std::cout << "🇹🇷 Out: " << output << std::endl;
+        std::cout << "🇮🇹 Out: " << output << std::endl;
     }
     catch (const std::exception& e) {
         std::cerr << "🔥 Crash: " << e.what() << std::endl;
