@@ -1,0 +1,34 @@
+=== NMT-MenKan English-to-Italian Accuracy Evaluation ===
+Script  : evaluate_nmt_fast.py (direct CTranslate2, batched)
+Dataset : flores200 devtest (eng_Latn → ita_Latn)
+Sentences: 1000
+Batch size: 32   Beam size: 1   Threads: 8
+
+--- Metrics ---
+BLEU Score  : 26.92
+BLEU = 26.92 62.6/36.9/23.2/14.8 (BP = 0.901 ratio = 0.906 hyp_len = 24454 ref_len = 26992)
+
+chrF++ Score: 56.16
+chrF2 = 56.16
+
+--- Sample Outputs (First 5) ---
+ENG (Source) : "We now have 4-month-old mice that are non-diabetic that used to be diabetic," he added.
+ITA (Predict): "Ora abbiamo topi non diabetici di 4 mesi che erano diabetici", ha aggiunto.
+ITA (Target) : "Abbiamo topi di quattro mesi che prima erano diabetici e ora non lo sono più", ha aggiunto.
+----------------------------------------
+ENG (Source) : Dr. Ehud Ur, professor of medicine at Dalhousie University in Halifax, Nova Scotia and chair of the clinical and scientific division of the Canadian Diabetes Association cautioned that the research is still in its early days.
+ITA (Predict): Ehud Ur, professore di medicina presso la Dalhousie University di Halifax, in Nova Scotia e presidente della divisione clinica e scientifica della Canadian Diabetes Association, ha avvertito che la ricerca è ancora nei primi giorni.
+ITA (Target) : Lo studio è ancora in fase iniziale, come dichiarato cautelativamente dal dottor Ehud Ur, professore di medicina alla Dalhousie University di Halifax, Nuova Scozia, e direttore del dipartimento clinico e scientifico della Canadian Diabetes Association.
+----------------------------------------
+ENG (Source) : Like some other experts, he is skeptical about whether diabetes can be cured, noting that these findings have no relevance to people who already have Type 1 diabetes.
+ITA (Predict): Come alcuni altri esperti, egli è scettico sul fatto che il diabete possa essere curato, osservando che questi risultati non hanno alcuna rilevanza per le persone che già hanno il diabete di tipo 1.
+ITA (Target) : Come altri esperti, è scettico circa la possibilità di curare il diabete, sottolineando che questi risultati non hanno rilevanza per chi è già affetto dal diabete di tipo 1.
+----------------------------------------
+ENG (Source) : On Monday, Sara Danius, permanent secretary of the Nobel Committee for Literature at the Swedish Academy, publicly announced during a radio program on Sveriges Radio in Sweden the committee, unable to reach Bob Dylan directly about winning the 2016 Nobel Prize in Literature, had abandoned its efforts to reach him.
+ITA (Predict): Lunedì, Sara Danius, segretaria permanente del Comitato Nobel per la Letteratura dell'Accademia svedese, ha annunciato pubblicamente durante un programma radio su Sveriges Radio in Svezia che il comitato, non riuscendo a contattare Bob Dylan direttamente sul premio Nobel per la letteratura 2016, aveva abbandonato i suoi sforzi per raggiungerlo.
+ITA (Target) : La segretaria permanente del Comitato per il Nobel per la letteratura dell'Accademia svedese, Sara Danius, nel corso di un programma radiofonico andato in onda lunedì sulla radio svedese Sveriges Radio, ha annunciato pubblicamente che il Comitato ha rinunciato a contattare Bob Dylan, non riuscendo a raggiungerlo direttamente per comunicargli la vittoria del Nobel per la letteratura 2016.
+----------------------------------------
+ENG (Source) : Danius said, "Right now we are doing nothing. I have called and sent emails to his closest collaborator and received very friendly replies. For now, that is certainly enough."
+ITA (Predict): Danius ha detto: "In questo momento non stiamo facendo nulla. Ho chiamato e mandato e-mail al suo collaboratore più vicino e ho ricevuto risposte molto amichevoli. Per ora, questo è sicuramente sufficiente".
+ITA (Target) : Danius ha dischiarato: "Ora come ora non stiamo facendo niente. Ho telefonato e inviato e-mail al suo più stretto collaboratore, che mi ha risposto in modo molto gentile. Per il momento, basta e avanza".
+----------------------------------------
