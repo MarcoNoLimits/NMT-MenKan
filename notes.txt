@@ -1,0 +1,5 @@
+How to fix the HoloLens Precision:
+If the HoloLens translations feel inaccurate, the #1 cause is the Speech-to-Text output.
+
+Punctuation Restoration: You either need to use a speech recognizer that auto-punctuates (like Azure Speech Services / Whisper), or pass the HoloLens text through a quick punctuation model before sending it to the NMT Server.
+Context Window: If you say a 3-word sentence, wait, and say 3 more words, the model translates them blindly. Translating full, long sentences is always much more precise than translating fragments.

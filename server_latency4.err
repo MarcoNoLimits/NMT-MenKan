@@ -1,0 +1,1 @@
+[2026-03-09 13:40:08.657] [ctranslate2] [thread 13668] [warning] The compute type inferred from the saved model is int8_float32, but the target device or backend do not support efficient int8_float32 computation. The model weights have been automatically converted to use the float32 compute type instead.
