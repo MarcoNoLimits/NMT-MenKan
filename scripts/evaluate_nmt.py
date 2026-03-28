@@ -6,13 +6,13 @@ from tqdm import tqdm
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def translate_via_tcp(text: str, host='127.0.0.1', port=8080) -> str:
+def translate_via_tcp(text: str, host='127.0.0.1', port=18080) -> str:
     """Send a single english string to the C++ server via TCP and return the Italian result."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.connect((host, port))
-            # Send english text
-            s.sendall(text.encode('utf-8'))
+            # Send english text (newline framing matches TCP server; enables long lines)
+            s.sendall(text.encode('utf-8') + b'\n')
             
             # Receive Italian result
             data = s.recv(1024)

@@ -229,47 +229,10 @@ namespace NMT {
     NMTWrapper::~NMTWrapper() = default;
     std::string NMTWrapper::translate(const std::string& text) { return impl->translate(text); }
 }
-D. src/main.cpp (The Runner)
-Includes critical fixes for UTF-8 encoding (so Italian characters show up) and Threading (prevents OpenBLAS memory crash).
+D. `src/main.cpp` (The runner)
+The checked-in entry point is a **TCP server** (default port **18080**, separate from typical HTTP **8080**): it loads the same `NMTWrapper` as the Unity plugin, accepts UTF‑8 English lines from clients, and returns Italian text. It is not a one-shot console demo. See the file for `SetConsoleOutputCP(CP_UTF8)`, `TCP_NODELAY`, and newline-framed reads.
 
-C++
-#include <iostream>
-#include <cstdlib>
-#include "NMT/NMTWrapper.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
-int main() {
-    // CRITICAL FIX: Prevent OpenBLAS from conflicting with CTranslate2 threads
-    _putenv("OPENBLAS_NUM_THREADS=1");
-
-    // CRITICAL FIX: Force Windows Console to UTF-8
-    #ifdef _WIN32
-    SetConsoleOutputCP(CP_UTF8);
-    #endif
-
-    std::string model_path = "nllb_int8"; 
-    std::string sp_model_path = "sentencepiece.bpe.model";
-
-    std::cout << "🚀 Initializing Yeelen-Link Engine..." << std::endl;
-    
-    try {
-        NMT::NMTWrapper engine(model_path, sp_model_path);
-        std::string input = "Hello, this is a test for the HoloLens project.";
-        std::cout << "🇬🇧 In: " << input << std::endl;
-        std::string output = engine.translate(input);
-        std::cout << "🇮🇹 Out: " << output << std::endl;
-    }
-    catch (const std::exception& e) {
-        std::cerr << "🔥 Crash: " << e.what() << std::endl;
-        return 1;
-    }
-    std::cout << "\n(Press Enter to exit)";
-    std::cin.get();
-    return 0;
-}
+The server **binds and listens immediately**; the int8 model and tokenizer load on a **background thread** (weights still must be read from disk once — physics, not a UI freeze). A client can connect as soon as the port is open; the first `translate` blocks until loading finishes (and a short internal warmup decode completes). **Real-time** here means low latency **per sentence after** the engine is ready, not “no load cost.” To avoid waiting for load during a demo, start `NMT_MenKan.exe` early or install it as an always-on service so the model stays resident.
 5. How to Build & Run (The Recipe)
 Open PowerShell in the NMT-MenKan folder and run these commands in order.
 
@@ -312,6 +275,29 @@ Step 4: Run
 PowerShell
 cd build/Release
 .\NMT_MenKan.exe
+
+The executable is built from the `NMT_TCP_Server` CMake target but is named **`NMT_MenKan.exe`** (`OUTPUT_NAME`) so scripts and this doc stay stable.
+
+### Alternative: Python TCP server (recommended for Windows PC dev)
+If the C++ binary logs that **int8_float32** is not supported and falls back to **float32**, or you see **OpenBLAS** allocator errors, use the **pip** build of CTranslate2 instead — it usually includes backends that run **int8** efficiently (same stack as `evaluate_nmt_fast.py`).
+
+1. Install: `pip install ctranslate2 sentencepiece`
+2. From the folder that contains **`nllb_int8`** (for example `build\Release`):  
+   `python scripts/nmt_tcp_server.py`  
+   Defaults: port **18080**, model **`nllb_int8`**, tokenizer inside that folder.  
+   Use `--model-dir` / `--spm` if paths differ.
+
+The wire protocol matches the C++ server (one UTF‑8 line per connection, optional HTTP rejection). Use **`scripts/benchmark_tcp_batch.py`** or your HoloLens client against **18080** unchanged.
+
+### Load time vs “real time”
+- You should see **“Listening … model loading in background”** right away; the process is not stuck before the port opens.
+- **Disk read of the quantized weights** still takes time on the first run; that cannot be removed without keeping a loaded process alive (e.g. start the server at login). Int8 is used for size/speed on device; on Windows x64 the stack uses OpenBLAS — if you need a different precision path, that requires a **separately converted** CTranslate2 model, not a flag flip on the same files.
+- **Antivirus** scanning the exe/DLLs can add delay on first run.
+
+### Warnings you might see
+- **During `cmake` configure:** deprecation notices about `cmake_minimum_required` from **Fetched** projects (Abseil, SentencePiece, CTranslate2). They come from upstream `CMakeLists.txt`, not this repo; they do not block the build.
+- **During compile:** Messages pointing at files under `build/_deps/ctranslate2-src/…` (for example **C4244** in `decoding_utils.h`) are from **third-party headers**. The project enables `/wd4566` for MSVC to quiet a spurious **C4566** from those headers. Remaining third-party warnings can be ignored unless you change compiler warning levels globally.
+
 6. Future Roadmap
 Audio Integration: The next step is feeding the translate() function with text from a Speech-to-Text (STT) engine instead of a hardcoded string.
 
