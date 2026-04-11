@@ -1,0 +1,2 @@
+*.bin filter=lfs diff=lfs merge=lfs -text
+nllb_int8/** filter=lfs diff=lfs merge=lfs -text

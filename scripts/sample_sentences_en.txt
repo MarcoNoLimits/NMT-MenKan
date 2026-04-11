@@ -1,0 +1,11 @@
+# English lines to translate (one sentence per line). Lines starting with # are ignored.
+# Start NMT_MenKan.exe first, then run: python scripts/benchmark_tcp_batch.py
+
+Hello, how are you today?
+The weather is nice this afternoon.
+I would like a coffee and a glass of water, please.
+Can you hear me clearly?
+What should I do with this device?
+Thank you for your patience.
+We now have four-month-old mice that are non-diabetic; they used to be diabetic, he added.
+My phone has a voice recorder but I do not think it has a feature that boosts volume.
