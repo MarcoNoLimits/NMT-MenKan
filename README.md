@@ -1,4 +1,4 @@
-﻿# NMT-MenKan
+# NMT-MenKan
 
 **Real-Time Neural Machine Translation for HoloLens 2** *Bridging the gap for the hearing impaired through Language.*
 
@@ -23,6 +23,13 @@ The project name derives from **"MenKan"** (Bambara for *hear and understand*), 
 * `/src`: Native C++ implementation of the translation worker.
 * `/models`: Scripts for converting HuggingFace checkpoints to CTranslate2 format.
 * `/docs`: Architecture diagrams and HoloLens 2 deployment guides.
+
+## HTTP API Deployment (Hugging Face Spaces)
+- A Docker-ready HTTP API is available at `scripts/nmt_http_api.py`.
+- Endpoint docs:
+  - `GET /healthz`
+  - `POST /translate` with JSON `{ "text": "..." }`
+- Deployment guide: `HUGGINGFACE_SPACES.md`
 
 ---
 
