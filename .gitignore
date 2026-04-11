@@ -33,3 +33,16 @@ ENV/
 
 # CTranslate2 model folder (nllb_int8/) is tracked in Git; large blobs use LFS via .gitattributes.
 # Install Git LFS (`git lfs install`) before cloning/pushing repos that include the model.
+
+# Logs / local eval (avoid accidental `git add .` on Hugging Face deploy branch)
+benchmark.log
+server_eval.log
+server_*.log
+server_*.err
+evaluation_report.txt
+build_log*.txt
+notes.txt
+
+# Binary reports (Hugging Face rejects raw binaries; use LFS with -f if you must commit)
+Report/*.pdf
+Report/*.docx

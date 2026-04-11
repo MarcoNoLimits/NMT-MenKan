@@ -27,6 +27,8 @@ git push hf main
 
 If your default branch is not `main`, push that branch.
 
+**Important:** On a slim branch used only for Spaces, do **not** run `git add .` from the repo root. That can stage logs, `Report/*.pdf`, and the C++ tree and will make Hugging Face reject the push. Stage files explicitly (for example `git add .dockerignore README.md Dockerfile requirements.txt scripts/ nllb_int8/ .gitattributes`) or rely on `.gitignore` patterns below.
+
 ## 3) Configure secrets/variables
 
 In Space **Settings**:
