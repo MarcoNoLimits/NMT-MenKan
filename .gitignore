@@ -1,0 +1,35 @@
+# Build Headers
+/build/
+/build_log.txt
+/release_log.txt
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.ups
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+
+# Dependencies
+/cmake/ctranslate2-src
+/cmake/sentencepiece-src
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# Local vcpkg checkout (large; use submodule or separate clone if needed)
+/vcpkg/
+
+# CTranslate2 model folder (nllb_int8/) is tracked in Git; large blobs use LFS via .gitattributes.
+# Install Git LFS (`git lfs install`) before cloning/pushing repos that include the model.
