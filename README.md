@@ -1,3 +1,14 @@
+---
+title: NMT MenKan
+emoji: 🌐
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: En-It translation API (FastAPI + CTranslate2)
+---
+
 # NMT-MenKan
 
 **Real-Time Neural Machine Translation for HoloLens 2** *Bridging the gap for the hearing impaired through Language.*
