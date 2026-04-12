@@ -1,93 +1,125 @@
-# Hugging Face Spaces Deployment (Free-Friendly)
+# Hugging Face Spaces — NMT MenKan (this project)
 
-This repo is ready for a Docker Space that serves:
+**Space (Hub page):** [https://huggingface.co/spaces/marconolimits/NMT](https://huggingface.co/spaces/marconolimits/NMT)
 
-- `GET /healthz`
-- `POST /translate`
+**Public app base URL (API):** `https://marconolimits-nmt.hf.space`
 
-from `scripts/nmt_http_api.py`.
+**Git remote (HTTPS):** `https://huggingface.co/spaces/marconolimits/NMT`
 
-## 1) Create a Space
+Endpoints (from `scripts/nmt_http_api.py`):
 
-1. Go to [Hugging Face Spaces](https://huggingface.co/spaces).
-2. Click **Create new Space**.
-3. Choose:
-   - **SDK**: `Docker`
-   - **Visibility**: Public (or Private)
-4. Create the Space.
+- `GET /` — short HTML help
+- `GET /healthz` — health check
+- `GET /translate?text=...` — translate (short text; prefer POST for long text)
+- `POST /translate` — translate (JSON, form, or plain text body)
+
+---
+
+## 1) Create a Space (already done for you)
+
+If you recreate elsewhere: [Spaces](https://huggingface.co/spaces) → **Create new Space** → SDK **Docker**.
+
+---
 
 ## 2) Push this repo to the Space
 
-Use the Space Git URL as your remote and push:
+Add the remote once (skip if `hf` already exists):
 
 ```bash
-git remote add hf https://huggingface.co/spaces/YOUR_USERNAME/YOUR_SPACE_NAME
-git push hf main
+git remote add hf https://huggingface.co/spaces/marconolimits/NMT
 ```
 
-If your default branch is not `main`, push that branch.
-
-**Important:** On a slim branch used only for Spaces, do **not** run `git add .` from the repo root. That can stage logs, `Report/*.pdf`, and the C++ tree and will make Hugging Face reject the push. Stage files explicitly (for example `git add .dockerignore README.md Dockerfile requirements.txt scripts/ nllb_int8/ .gitattributes`) or rely on `.gitignore` patterns below.
-
-## 3) Configure secrets/variables
-
-In Space **Settings**:
-
-- Set `REQUIRE_API_KEY=1` (recommended for public usage)
-- Set `NMT_API_KEY=<long-random-string>`
-
-Optional vars:
-
-- `MAX_INPUT_CHARS=2000`
-- `TRANSLATION_TIMEOUT_MS=10000`
-
-If you leave `REQUIRE_API_KEY=0`, endpoint stays open.
-
-## 4) Run and verify
-
-Once the build is green, test:
-
-Health:
+This branch is deployed with:
 
 ```bash
-curl https://YOUR_SPACE_SUBDOMAIN.hf.space/healthz
+git push hf hf-space:main
 ```
 
-Translate:
+If your deploy branch is named differently, replace `hf-space`.
+
+**Do not** run `git add .` from the repo root on the deploy branch. Stage only what the Space needs (for example `Dockerfile`, `requirements.txt`, `scripts/`, `nllb_int8/`, `README.md`, `.dockerignore`, `.gitattributes`, `.gitignore`) or rely on `.gitignore` so Hub rejects no binary junk.
+
+---
+
+## 3) Configure secrets / variables
+
+In [Space settings → Variables and secrets](https://huggingface.co/spaces/marconolimits/NMT/settings):
+
+| Name | Suggested value |
+|------|-----------------|
+| `REQUIRE_API_KEY` | `1` for production (requires header on `/translate`) |
+| `NMT_API_KEY` | paste a long random secret (you store this; do not commit it) |
+
+Optional:
+
+| Name | Example |
+|------|---------|
+| `MAX_INPUT_CHARS` | `2000` |
+| `TRANSLATION_TIMEOUT_MS` | `10000` |
+
+If `REQUIRE_API_KEY=0`, the API stays open (only for testing).
+
+---
+
+## 4) Run and verify (copy-paste)
+
+### Health
 
 ```bash
-curl -X POST https://YOUR_SPACE_SUBDOMAIN.hf.space/translate \
+curl https://marconolimits-nmt.hf.space/healthz
+```
+
+### Translate (JSON — recommended)
+
+Replace `YOUR_NMT_API_KEY` only if you enabled `REQUIRE_API_KEY=1` (otherwise omit the `-H` line).
+
+```bash
+curl -X POST "https://marconolimits-nmt.hf.space/translate" \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: YOUR_API_KEY" \
+  -H "X-API-Key: YOUR_NMT_API_KEY" \
   -d '{"text":"Hello, how are you?"}'
 ```
 
-### Production client (recommended)
+### Translate (GET — short sentences only)
 
-Use `scripts/nmt_client.py` from your app or jobs so every call uses the correct JSON and headers:
+```bash
+curl "https://marconolimits-nmt.hf.space/translate?text=Hello"
+```
+
+### PowerShell (`Invoke-RestMethod`)
+
+```powershell
+$body = @{ text = "Hello, how are you?" } | ConvertTo-Json
+$headers = @{ "X-API-Key" = "YOUR_NMT_API_KEY" }   # omit this line if API key is off
+Invoke-RestMethod -Uri "https://marconolimits-nmt.hf.space/translate" -Method Post -Body $body -ContentType "application/json; charset=utf-8" -Headers $headers
+```
+
+### Production client (Python — always correct JSON)
 
 ```python
 from scripts.nmt_client import translate
 
-r = translate("https://YOUR_USERNAME-YOUR_SPACE.hf.space", "Hello, how are you?", api_key="YOUR_KEY")
+r = translate(
+    "https://marconolimits-nmt.hf.space",
+    "Hello, how are you?",
+    api_key="YOUR_NMT_API_KEY",  # omit if REQUIRE_API_KEY=0
+)
 print(r.translation)
 ```
 
-### Request formats (all supported on `POST /translate`)
+### Request formats (`POST /translate`)
 
-- **JSON:** `Content-Type: application/json`, body `{"text":"..."}` (preferred for production)
-- **Form:** `application/x-www-form-urlencoded` or `multipart/form-data` with field `text`
-- **Plain:** `Content-Type: text/plain`, body is the sentence only
-- **GET (convenience):** `GET /translate?text=...` (URLs are length-limited; prefer POST for long text)
+- **JSON:** `Content-Type: application/json`, body `{"text":"..."}` (preferred)
+- **Form:** field `text` (`application/x-www-form-urlencoded` or `multipart/form-data`)
+- **Plain:** `Content-Type: text/plain`, body = the sentence only
 
-### Validation errors
+Malformed input returns **400** with an `hint` field when applicable.
 
-Malformed JSON or missing `text` returns **400** with an `hint` field. Typos in JSON shape that reach Pydantic return **422** with the same `hint`.
+---
 
 ## 5) Free-tier expectations
 
-- The Space can sleep when idle.
-- First request after sleep can be slow (cold start).
-- CPU/RAM limits may constrain throughput for large bursts.
+- The Space can sleep when idle; the first request after sleep can be slow.
+- CPU/RAM limits may cap throughput.
 
-For better uptime/performance, move to paid hardware or Cloud Run later.
+For heavier load or always-on behavior, consider paid Space hardware or another host.
