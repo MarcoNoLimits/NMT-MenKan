@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 from scripts.nmt_tcp_server import load_spm, load_translator, translate_one
@@ -94,6 +95,22 @@ app = FastAPI(title="NMT MenKan HTTP API", lifespan=lifespan)
 def _require_api_key(header_key: str | None, expected_key: str | None) -> None:
     if not expected_key or not header_key or header_key != expected_key:
         raise HTTPException(status_code=401, detail="Unauthorized")
+
+
+@app.get("/", response_class=HTMLResponse)
+def root() -> str:
+    return (
+        "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'/>"
+        "<title>NMT MenKan</title></head><body>"
+        "<h1>NMT MenKan</h1>"
+        "<p>English → Italian translation API (CTranslate2).</p>"
+        "<ul>"
+        "<li><code>GET /healthz</code> — health check</li>"
+        "<li><code>POST /translate</code> — JSON body <code>{\"text\":\"Your English here\"}</code>"
+        " (optional header <code>X-API-Key</code> if configured)</li>"
+        "</ul>"
+        "</body></html>"
+    )
 
 
 @app.get("/healthz")
