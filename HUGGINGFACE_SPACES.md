@@ -62,6 +62,28 @@ curl -X POST https://YOUR_SPACE_SUBDOMAIN.hf.space/translate \
   -d '{"text":"Hello, how are you?"}'
 ```
 
+### Production client (recommended)
+
+Use `scripts/nmt_client.py` from your app or jobs so every call uses the correct JSON and headers:
+
+```python
+from scripts.nmt_client import translate
+
+r = translate("https://YOUR_USERNAME-YOUR_SPACE.hf.space", "Hello, how are you?", api_key="YOUR_KEY")
+print(r.translation)
+```
+
+### Request formats (all supported on `POST /translate`)
+
+- **JSON:** `Content-Type: application/json`, body `{"text":"..."}` (preferred for production)
+- **Form:** `application/x-www-form-urlencoded` or `multipart/form-data` with field `text`
+- **Plain:** `Content-Type: text/plain`, body is the sentence only
+- **GET (convenience):** `GET /translate?text=...` (URLs are length-limited; prefer POST for long text)
+
+### Validation errors
+
+Malformed JSON or missing `text` returns **400** with an `hint` field. Typos in JSON shape that reach Pydantic return **422** with the same `hint`.
+
 ## 5) Free-tier expectations
 
 - The Space can sleep when idle.

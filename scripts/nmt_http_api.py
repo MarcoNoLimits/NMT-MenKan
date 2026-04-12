@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -9,8 +10,9 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from fastapi import FastAPI, Header, HTTPException, Request
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
+from pydantic import BaseModel
 
 from scripts.nmt_tcp_server import load_spm, load_translator, translate_one
 
@@ -18,6 +20,12 @@ log = logging.getLogger("nmt_http_api")
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+
+_TRANSLATE_HINT = (
+    'Send English in JSON: {"text":"Your sentence here"} with '
+    "Content-Type: application/json. Alternatives: form field `text`, "
+    "raw text/plain body, or GET /translate?text=..."
 )
 
 
@@ -42,10 +50,6 @@ class AppState:
     max_chars: int
     timeout_seconds: float
     require_api_key: bool
-
-
-class TranslateRequest(BaseModel):
-    text: str = Field(min_length=1, max_length=2000)
 
 
 class TranslateResponse(BaseModel):
@@ -92,47 +96,102 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="NMT MenKan HTTP API", lifespan=lifespan)
 
 
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "detail": exc.errors(),
+            "hint": _TRANSLATE_HINT,
+        },
+    )
+
+
 def _require_api_key(header_key: str | None, expected_key: str | None) -> None:
     if not expected_key or not header_key or header_key != expected_key:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-@app.get("/", response_class=HTMLResponse)
-def root() -> str:
-    return (
-        "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'/>"
-        "<title>NMT MenKan</title></head><body>"
-        "<h1>NMT MenKan</h1>"
-        "<p>English → Italian translation API (CTranslate2).</p>"
-        "<ul>"
-        "<li><code>GET /healthz</code> — health check</li>"
-        "<li><code>POST /translate</code> — JSON body <code>{\"text\":\"Your English here\"}</code>"
-        " (optional header <code>X-API-Key</code> if configured)</li>"
-        "</ul>"
-        "</body></html>"
+async def _extract_english_text(request: Request) -> str:
+    """Accept JSON {\"text\":...}, form field text, or raw text/plain."""
+    raw_ct = request.headers.get("content-type") or ""
+    ct = raw_ct.split(";")[0].strip().lower()
+
+    if ct in ("application/json", "") or "application/json" in raw_ct:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_json",
+                    "message": str(exc),
+                    "hint": _TRANSLATE_HINT,
+                },
+            ) from exc
+        if body is None:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "empty_body", "hint": _TRANSLATE_HINT},
+            )
+        if not isinstance(body, dict):
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "invalid_body",
+                    "message": "JSON body must be an object",
+                    "hint": _TRANSLATE_HINT,
+                },
+            )
+        if "text" not in body:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "missing_text",
+                    "hint": _TRANSLATE_HINT,
+                },
+            )
+        return str(body["text"])
+
+    if ct in ("application/x-www-form-urlencoded", "multipart/form-data"):
+        form = await request.form()
+        if "text" not in form:
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "missing_text",
+                    "message": "Form must include a field named text",
+                    "hint": _TRANSLATE_HINT,
+                },
+            )
+        return str(form["text"])
+
+    if ct == "text/plain":
+        raw = (await request.body()).decode("utf-8", errors="replace")
+        return raw.strip()
+
+    raise HTTPException(
+        status_code=415,
+        detail={
+            "error": "unsupported_media_type",
+            "content_type": raw_ct or "(missing)",
+            "hint": _TRANSLATE_HINT,
+        },
     )
 
 
-@app.get("/healthz")
-def healthz() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.post("/translate", response_model=TranslateResponse)
-async def translate(
-    request: Request,
-    payload: TranslateRequest,
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+async def _translate_core(
+    state: AppState,
+    text: str,
+    request_id: str,
 ) -> TranslateResponse:
-    state: AppState = request.app.state.nmt
-    request_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
-
-    if state.require_api_key:
-        _require_api_key(x_api_key, state.api_key)
-
-    text = payload.text.strip()
+    text = text.strip()
     if not text:
-        raise HTTPException(status_code=400, detail="Text must not be empty")
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "empty_text", "hint": _TRANSLATE_HINT},
+        )
     if len(text) > state.max_chars:
         raise HTTPException(
             status_code=413,
@@ -164,3 +223,52 @@ async def translate(
         latency_ms=round(latency_ms, 1),
         request_id=request_id,
     )
+
+
+@app.get("/", response_class=HTMLResponse)
+def root() -> str:
+    return (
+        "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'/>"
+        "<title>NMT MenKan</title></head><body>"
+        "<h1>NMT MenKan</h1>"
+        "<p>English → Italian translation API (CTranslate2).</p>"
+        "<ul>"
+        "<li><code>GET /healthz</code> — health check</li>"
+        "<li><code>POST /translate</code> — body: JSON <code>{\"text\":\"...\"}</code>, "
+        "or form field <code>text</code>, or raw <code>text/plain</code></li>"
+        "<li><code>GET /translate?text=...</code> — same translation (URL-encoded text)</li>"
+        "<li>Optional header: <code>X-API-Key</code> if configured</li>"
+        "</ul>"
+        "</body></html>"
+    )
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/translate", response_model=TranslateResponse)
+async def translate_get(
+    request: Request,
+    text: str,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> TranslateResponse:
+    state: AppState = request.app.state.nmt
+    request_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
+    if state.require_api_key:
+        _require_api_key(x_api_key, state.api_key)
+    return await _translate_core(state, text, request_id)
+
+
+@app.post("/translate", response_model=TranslateResponse)
+async def translate_post(
+    request: Request,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> TranslateResponse:
+    state: AppState = request.app.state.nmt
+    request_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
+    if state.require_api_key:
+        _require_api_key(x_api_key, state.api_key)
+    text = await _extract_english_text(request)
+    return await _translate_core(state, text, request_id)
