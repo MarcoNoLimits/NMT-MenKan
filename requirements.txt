@@ -2,3 +2,4 @@ ctranslate2
 sentencepiece
 fastapi
 uvicorn[standard]
+python-dotenv

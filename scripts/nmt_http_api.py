@@ -8,6 +8,14 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
@@ -226,21 +234,19 @@ async def _translate_core(
 
 
 @app.get("/", response_class=HTMLResponse)
-def root() -> str:
-    return (
-        "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'/>"
-        "<title>NMT MenKan</title></head><body>"
-        "<h1>NMT MenKan</h1>"
-        "<p>English → Italian translation API (CTranslate2).</p>"
-        "<ul>"
-        "<li><code>GET /healthz</code> — health check</li>"
-        "<li><code>POST /translate</code> — body: JSON <code>{\"text\":\"...\"}</code>, "
-        "or form field <code>text</code>, or raw <code>text/plain</code></li>"
-        "<li><code>GET /translate?text=...</code> — same translation (URL-encoded text)</li>"
-        "<li>Optional header: <code>X-API-Key</code> if configured</li>"
-        "</ul>"
-        "</body></html>"
+def root(request: Request) -> HTMLResponse:
+    state: AppState = request.app.state.nmt
+    path = Path(__file__).resolve().parent / "hf_space_ui.html"
+    try:
+        html = path.read_text(encoding="utf-8")
+    except OSError:
+        html = "<!DOCTYPE html><html><body><p>UI file missing.</p></body></html>"
+    html = html.replace(
+        "__INJECT_REQUIRE_API_KEY__",
+        "true" if state.require_api_key else "false",
     )
+    html = html.replace("__INJECT_MAX_CHARS__", str(state.max_chars))
+    return HTMLResponse(content=html)
 
 
 @app.get("/healthz")

@@ -41,23 +41,52 @@ If your deploy branch is named differently, replace `hf-space`.
 
 ---
 
-## 3) Configure secrets / variables
+## 3) API key (production)
 
-In [Space settings → Variables and secrets](https://huggingface.co/spaces/marconolimits/NMT/settings):
+The server reads **`NMT_API_KEY`** (secret) and **`REQUIRE_API_KEY`** (`1` = enforce).  
+Clients must send **`X-API-Key: <same value>`** on **`POST /translate`**, **`GET /translate`**, and **`GET /`** does not need a key. **`GET /healthz`** stays public for probes.
 
-| Name | Suggested value |
-|------|-----------------|
-| `REQUIRE_API_KEY` | `1` for production (requires header on `/translate`) |
-| `NMT_API_KEY` | paste a long random secret (you store this; do not commit it) |
+### 3a) On Hugging Face (this Space)
 
-Optional:
+1. Open **[Space → Settings → Variables and secrets](https://huggingface.co/spaces/marconolimits/NMT/settings)**.
+2. Under **Variables**, add:
+   - Name: `REQUIRE_API_KEY` → Value: `1`
+3. Under **Secrets** (or **Repository secrets**), add:
+   - Name: `NMT_API_KEY` → Value: a long random string (example generator below).  
+   - Treat this like a password; save it in your password manager for clients.
+
+4. **Factory reboot:** open the Space **App** tab or use **Restart** so the container picks up env vars.
+
+5. Test (replace `PASTE_YOUR_KEY_HERE`):
+
+```bash
+curl -sS "https://marconolimits-nmt.hf.space/healthz"
+curl -sS -X POST "https://marconolimits-nmt.hf.space/translate" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: PASTE_YOUR_KEY_HERE" \
+  -d '{"text":"Hello"}'
+```
+
+A wrong or missing key returns **`401`** with `{"detail":"Unauthorized"}`.
+
+### 3b) Local development
+
+Copy **`.env.example`** to **`.env`**, set `NMT_API_KEY` and `REQUIRE_API_KEY=1`, then run uvicorn from the repo root. **`.env` is gitignored** — never commit it.
+
+Generate a key (any one of these):
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+
+### Optional variables (HF or `.env`)
 
 | Name | Example |
 |------|---------|
 | `MAX_INPUT_CHARS` | `2000` |
 | `TRANSLATION_TIMEOUT_MS` | `10000` |
 
-If `REQUIRE_API_KEY=0`, the API stays open (only for testing).
+If `REQUIRE_API_KEY=0`, the API stays open (testing only). If you set `REQUIRE_API_KEY=1`, you **must** set `NMT_API_KEY` or the app will fail at startup.
 
 ---
 
