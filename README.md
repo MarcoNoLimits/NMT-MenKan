@@ -41,6 +41,7 @@ The project name derives from **"MenKan"** (Bambara for *hear and understand*), 
   - `GET /healthz`
   - `POST /translate` with JSON `{ "text": "..." }`
 - Deployment guide: `HUGGINGFACE_SPACES.md`
+- **Integrate another app** (any stack) against the live Hugging Face URL: `HF_API_INTEGRATION.md`
 
 ---
 
