@@ -39,8 +39,12 @@ if TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 log = logging.getLogger(__name__)
 
-SRC_LANG = "eng_Latn"
-TGT_LANG = "ita_Latn"
+DEFAULT_SRC_LANG = "eng_Latn"
+DEFAULT_TGT_LANG = "ita_Latn"
+SUPPORTED_PAIRS = {
+    ("eng_Latn", "ita_Latn"),
+    ("ita_Latn", "eng_Latn"),
+}
 BEAM_SIZE = 1
 MAX_DECODE = 256
 INTER_THREADS = 8
@@ -69,22 +73,34 @@ def tokenize_line(sp: spm.SentencePieceProcessor, text: str, src_lang: str) -> l
     return tokens
 
 
+def validate_lang_pair(src_lang: str, tgt_lang: str) -> None:
+    pair = (src_lang, tgt_lang)
+    if pair not in SUPPORTED_PAIRS:
+        raise ValueError(
+            f"Unsupported language pair {src_lang}->{tgt_lang}. "
+            "Allowed pairs: eng_Latn->ita_Latn, ita_Latn->eng_Latn"
+        )
+
+
 def translate_one(
     translator: ctranslate2.Translator,
     sp: spm.SentencePieceProcessor,
     text: str,
+    src_lang: str = DEFAULT_SRC_LANG,
+    tgt_lang: str = DEFAULT_TGT_LANG,
 ) -> str:
-    batch_in = [tokenize_line(sp, text, SRC_LANG)]
+    validate_lang_pair(src_lang, tgt_lang)
+    batch_in = [tokenize_line(sp, text, src_lang)]
     results = translator.translate_batch(
         batch_in,
-        target_prefix=[[TGT_LANG]],
+        target_prefix=[[tgt_lang]],
         beam_size=BEAM_SIZE,
         max_decoding_length=MAX_DECODE,
     )
     raw = results[0].hypotheses[0]
     out = sp.Decode(raw)
-    if out.startswith(TGT_LANG):
-        out = out[len(TGT_LANG) :].lstrip()
+    if out.startswith(tgt_lang):
+        out = out[len(tgt_lang) :].lstrip()
     return out
 
 
@@ -133,6 +149,8 @@ def serve(
     port: int,
     model_dir: str,
     spm_path: str,
+    default_src_lang: str,
+    default_tgt_lang: str,
 ) -> None:
     if not os.path.isdir(model_dir):
         log.error("Model directory not found: %s", model_dir)
@@ -144,7 +162,13 @@ def serve(
     translator = load_translator(model_dir)
     sp = load_spm(spm_path)
     # Warmup (same idea as C++ server)
-    _ = translate_one(translator, sp, "Hi")
+    _ = translate_one(
+        translator,
+        sp,
+        "Hi",
+        src_lang=default_src_lang,
+        tgt_lang=default_tgt_lang,
+    )
     log.info("Warmup done.")
 
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -171,10 +195,16 @@ def serve(
                 continue
 
             t0 = time.perf_counter()
-            italian = translate_one(translator, sp, line)
+            translated = translate_one(
+                translator,
+                sp,
+                line,
+                src_lang=default_src_lang,
+                tgt_lang=default_tgt_lang,
+            )
             ms = (time.perf_counter() - t0) * 1000.0
             log.info("Translated in %.1f ms", ms)
-            out = italian.encode("utf-8")
+            out = translated.encode("utf-8")
             conn.sendall(out)
         except Exception as e:
             log.exception("Request failed: %s", e)
@@ -196,13 +226,31 @@ def main() -> None:
         default=None,
         help="Path to sentencepiece.bpe.model (default: <model-dir>/sentencepiece.bpe.model)",
     )
+    p.add_argument(
+        "--src-lang",
+        default=DEFAULT_SRC_LANG,
+        help="Default source language for TCP text-only protocol",
+    )
+    p.add_argument(
+        "--tgt-lang",
+        default=DEFAULT_TGT_LANG,
+        help="Default target language for TCP text-only protocol",
+    )
     args = p.parse_args()
+    validate_lang_pair(args.src_lang, args.tgt_lang)
     spm_path = args.spm or os.path.join(args.model_dir, "sentencepiece.bpe.model")
 
     # Optional: reduce OpenBLAS threading fights on Windows when using numpy elsewhere
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
-    serve(args.host, args.port, os.path.abspath(args.model_dir), os.path.abspath(spm_path))
+    serve(
+        args.host,
+        args.port,
+        os.path.abspath(args.model_dir),
+        os.path.abspath(spm_path),
+        args.src_lang,
+        args.tgt_lang,
+    )
 
 
 if __name__ == "__main__":

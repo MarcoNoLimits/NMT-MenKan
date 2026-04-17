@@ -19,3 +19,19 @@ CMakeFiles/
 /cmake/sentencepiece-src
 
 /nllb_int8
+
+# Python caches
+__pycache__/
+*.pyc
+
+# Local virtual environments
+.venv/
+venv/
+
+# Training/evaluation generated artifacts (reproducible, usually large)
+/data/
+/artifacts/
+/reports/
+
+# Local dependency clone
+/vcpkg/
