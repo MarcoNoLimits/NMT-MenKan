@@ -57,7 +57,16 @@ Translate:
 curl -X POST https://YOUR_SPACE_SUBDOMAIN.hf.space/translate \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
-  -d '{"text":"Hello, how are you?"}'
+  -d '{"text":"Hello, how are you?","source_lang":"eng_Latn","target_lang":"ita_Latn"}'
+```
+
+For reverse direction:
+
+```bash
+curl -X POST https://YOUR_SPACE_SUBDOMAIN.hf.space/translate \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{"text":"Ciao, come stai?","source_lang":"ita_Latn","target_lang":"eng_Latn"}'
 ```
 
 ## 5) Free-tier expectations

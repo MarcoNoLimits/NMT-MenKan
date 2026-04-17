@@ -2,3 +2,10 @@ ctranslate2
 sentencepiece
 fastapi
 uvicorn[standard]
+sacrebleu
+datasets
+transformers
+peft
+accelerate
+evaluate
+numpy

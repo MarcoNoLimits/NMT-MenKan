@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -11,7 +12,15 @@ from dataclasses import dataclass
 from fastapi import FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from scripts.nmt_tcp_server import load_spm, load_translator, translate_one
+from scripts.nmt_tcp_server import (
+    DEFAULT_SRC_LANG,
+    DEFAULT_TGT_LANG,
+    SUPPORTED_PAIRS,
+    load_spm,
+    load_translator,
+    translate_one,
+    validate_lang_pair,
+)
 
 log = logging.getLogger("nmt_http_api")
 logging.basicConfig(
@@ -41,22 +50,49 @@ class AppState:
     max_chars: int
     timeout_seconds: float
     require_api_key: bool
+    model_variant: str
 
 
 class TranslateRequest(BaseModel):
     text: str = Field(min_length=1, max_length=2000)
+    source_lang: str = Field(default=DEFAULT_SRC_LANG, min_length=1, max_length=32)
+    target_lang: str = Field(default=DEFAULT_TGT_LANG, min_length=1, max_length=32)
 
 
 class TranslateResponse(BaseModel):
     translation: str
     latency_ms: float
     request_id: str
+    source_lang: str
+    target_lang: str
+    model_variant: str
+
+
+def _resolve_model_paths() -> tuple[str, str, str]:
+    model_variant = os.getenv("MODEL_VARIANT", "base").strip() or "base"
+    variants_json = os.getenv("MODEL_VARIANTS_JSON", "").strip()
+    if not variants_json:
+        model_dir = os.getenv("MODEL_DIR", "nllb_int8")
+        spm_path = os.getenv("SPM_PATH", os.path.join(model_dir, "sentencepiece.bpe.model"))
+        return model_variant, model_dir, spm_path
+
+    try:
+        variant_map = json.loads(variants_json)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("MODEL_VARIANTS_JSON must be valid JSON") from exc
+    if model_variant not in variant_map:
+        raise RuntimeError(f"MODEL_VARIANT {model_variant!r} not found in MODEL_VARIANTS_JSON")
+    selected = variant_map[model_variant]
+    model_dir = selected.get("model_dir")
+    spm_path = selected.get("spm_path") or os.path.join(model_dir, "sentencepiece.bpe.model")
+    if not model_dir:
+        raise RuntimeError(f"Variant {model_variant!r} is missing model_dir")
+    return model_variant, model_dir, spm_path
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    model_dir = os.getenv("MODEL_DIR", "nllb_int8")
-    spm_path = os.getenv("SPM_PATH", os.path.join(model_dir, "sentencepiece.bpe.model"))
+    model_variant, model_dir, spm_path = _resolve_model_paths()
     api_key = os.getenv("NMT_API_KEY", "").strip() or None
     require_api_key = _read_env_bool("REQUIRE_API_KEY", default=api_key is not None)
     max_chars = _read_env_int("MAX_INPUT_CHARS", 2000)
@@ -65,7 +101,12 @@ async def lifespan(app: FastAPI):
 
     os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
-    log.info("Loading model_dir=%s spm_path=%s", model_dir, spm_path)
+    log.info(
+        "Loading model_variant=%s model_dir=%s spm_path=%s",
+        model_variant,
+        model_dir,
+        spm_path,
+    )
     translator = load_translator(os.path.abspath(model_dir))
     sentencepiece = load_spm(os.path.abspath(spm_path))
 
@@ -84,6 +125,7 @@ async def lifespan(app: FastAPI):
         max_chars=max_chars,
         timeout_seconds=timeout_seconds,
         require_api_key=require_api_key,
+        model_variant=model_variant,
     )
     yield
 
@@ -121,11 +163,30 @@ async def translate(
             status_code=413,
             detail=f"Input exceeds MAX_INPUT_CHARS={state.max_chars}",
         )
+    source_lang = payload.source_lang.strip()
+    target_lang = payload.target_lang.strip()
+    try:
+        validate_lang_pair(source_lang, target_lang)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"{exc}. Supported pairs: "
+                f"{', '.join([f'{s}->{t}' for s, t in sorted(SUPPORTED_PAIRS)])}"
+            ),
+        ) from exc
 
     start = time.perf_counter()
     try:
         translation = await asyncio.wait_for(
-            asyncio.to_thread(translate_one, state.translator, state.sentencepiece, text),
+            asyncio.to_thread(
+                translate_one,
+                state.translator,
+                state.sentencepiece,
+                text,
+                source_lang,
+                target_lang,
+            ),
             timeout=state.timeout_seconds,
         )
     except asyncio.TimeoutError as exc:
@@ -146,4 +207,7 @@ async def translate(
         translation=translation,
         latency_ms=round(latency_ms, 1),
         request_id=request_id,
+        source_lang=source_lang,
+        target_lang=target_lang,
+        model_variant=state.model_variant,
     )
