@@ -134,6 +134,7 @@ def train_lora(
     eval_batch_size: int,
     gradient_accumulation_steps: int,
     max_length: int,
+    num_train_epochs: float,
     resume_from_checkpoint: str | None,
 ) -> None:
     import evaluate
@@ -200,7 +201,7 @@ def train_lora(
         per_device_train_batch_size=train_batch_size,
         per_device_eval_batch_size=eval_batch_size,
         gradient_accumulation_steps=gradient_accumulation_steps,
-        num_train_epochs=2,
+        num_train_epochs=num_train_epochs,
         eval_strategy="steps",
         eval_steps=500,
         save_steps=500,
@@ -270,6 +271,7 @@ def main() -> None:
     t.add_argument("--eval-batch-size", type=int, default=8)
     t.add_argument("--gradient-accumulation-steps", type=int, default=1)
     t.add_argument("--max-length", type=int, default=192)
+    t.add_argument("--num-train-epochs", type=float, default=2.0)
     t.add_argument("--resume-from-checkpoint", default=None)
 
     e = sub.add_parser("export-lora")
@@ -292,6 +294,7 @@ def main() -> None:
             args.eval_batch_size,
             args.gradient_accumulation_steps,
             args.max_length,
+            args.num_train_epochs,
             args.resume_from_checkpoint,
         )
     else:
