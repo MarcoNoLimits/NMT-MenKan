@@ -22,7 +22,15 @@ def convert_base_model(model_name: str, output_dir: str, quantization: str) -> N
 
 
 def prepare_data(out_dir: str, seed: int, val_ratio: float, test_ratio: float, max_per_corpus: int) -> None:
+    import warnings
     from datasets import load_dataset
+    from datasets import concatenate_datasets
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r".*Helsinki-NLP/tatoeba_mt contains custom code.*",
+        category=FutureWarning,
+    )
 
     def normalize(text: str) -> str:
         return re.sub(r"\s+", " ", text.strip())
@@ -44,9 +52,21 @@ def prepare_data(out_dir: str, seed: int, val_ratio: float, test_ratio: float, m
             rows.append({"source_text": tgt, "target_text": src, "source_lang": "ita_Latn", "target_lang": "eng_Latn", "dataset": name})
         return rows
 
+    def load_tatoeba_rows():
+        """
+        Handle split changes in newer datasets releases where tatoeba_mt may expose
+        validation/test only instead of train.
+        """
+        try:
+            return load_dataset("Helsinki-NLP/tatoeba_mt", "eng-ita", split="train")
+        except ValueError:
+            validation = load_dataset("Helsinki-NLP/tatoeba_mt", "eng-ita", split="validation")
+            test = load_dataset("Helsinki-NLP/tatoeba_mt", "eng-ita", split="test")
+            return concatenate_datasets([validation, test])
+
     books = load_dataset("opus_books", "en-it", split="train")
     europarl = load_dataset("Helsinki-NLP/europarl", "en-it", split="train")
-    tatoeba = load_dataset("Helsinki-NLP/tatoeba_mt", "eng-ita", split="train")
+    tatoeba = load_tatoeba_rows()
     books = books.select(range(min(len(books), max_per_corpus)))
     europarl = europarl.select(range(min(len(europarl), max_per_corpus)))
     tatoeba = tatoeba.select(range(min(len(tatoeba), max_per_corpus)))
@@ -106,18 +126,34 @@ def prepare_data(out_dir: str, seed: int, val_ratio: float, test_ratio: float, m
     print(f"Wrote curated dataset to {path}")
 
 
-def train_lora(data_dir: str, output_dir: str, model_name: str) -> None:
+def train_lora(
+    data_dir: str,
+    output_dir: str,
+    model_name: str,
+    train_batch_size: int,
+    eval_batch_size: int,
+    gradient_accumulation_steps: int,
+    max_length: int,
+    resume_from_checkpoint: str | None,
+) -> None:
     import evaluate
     import numpy as np
+    import warnings
     from datasets import load_dataset
     from peft import LoraConfig, TaskType, get_peft_model
     from transformers import AutoModelForSeq2SeqLM, AutoTokenizer, DataCollatorForSeq2Seq, Seq2SeqTrainer, Seq2SeqTrainingArguments
+
+    warnings.filterwarnings(
+        "ignore",
+        message=r".*Trainer\.tokenizer is now deprecated.*",
+        category=FutureWarning,
+    )
 
     dataset = load_dataset(
         "json",
         data_files={"train": str(Path(data_dir) / "train.jsonl"), "validation": str(Path(data_dir) / "val.jsonl")},
     )
-    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=True)
+    tokenizer = AutoTokenizer.from_pretrained(model_name, use_fast=False)
     model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
     lora_cfg = LoraConfig(
         task_type=TaskType.SEQ_2_SEQ_LM,
@@ -129,10 +165,18 @@ def train_lora(data_dir: str, output_dir: str, model_name: str) -> None:
     model = get_peft_model(model, lora_cfg)
 
     def preprocess(batch: dict) -> dict:
-        inputs = tokenizer(batch["source_text"], max_length=192, truncation=True)
-        labels = tokenizer(text_target=batch["target_text"], max_length=192, truncation=True)
-        inputs["labels"] = labels["input_ids"]
-        return inputs
+        tokenized = {"input_ids": [], "attention_mask": [], "labels": []}
+        for src_text, tgt_text, src_lang, tgt_lang in zip(
+            batch["source_text"], batch["target_text"], batch["source_lang"], batch["target_lang"]
+        ):
+            tokenizer.src_lang = src_lang
+            tokenizer.tgt_lang = tgt_lang
+            inputs = tokenizer(src_text, max_length=max_length, truncation=True)
+            labels = tokenizer(text_target=tgt_text, max_length=max_length, truncation=True)
+            tokenized["input_ids"].append(inputs["input_ids"])
+            tokenized["attention_mask"].append(inputs["attention_mask"])
+            tokenized["labels"].append(labels["input_ids"])
+        return tokenized
 
     tokenized = dataset.map(preprocess, batched=True, remove_columns=dataset["train"].column_names)
     collator = DataCollatorForSeq2Seq(tokenizer=tokenizer, model=model)
@@ -153,10 +197,11 @@ def train_lora(data_dir: str, output_dir: str, model_name: str) -> None:
     train_args = Seq2SeqTrainingArguments(
         output_dir=str(Path(output_dir) / "checkpoints"),
         learning_rate=2e-4,
-        per_device_train_batch_size=8,
-        per_device_eval_batch_size=8,
+        per_device_train_batch_size=train_batch_size,
+        per_device_eval_batch_size=eval_batch_size,
+        gradient_accumulation_steps=gradient_accumulation_steps,
         num_train_epochs=2,
-        evaluation_strategy="steps",
+        eval_strategy="steps",
         eval_steps=500,
         save_steps=500,
         predict_with_generate=True,
@@ -170,11 +215,11 @@ def train_lora(data_dir: str, output_dir: str, model_name: str) -> None:
         args=train_args,
         train_dataset=tokenized["train"],
         eval_dataset=tokenized["validation"],
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         data_collator=collator,
         compute_metrics=compute_metrics,
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=resume_from_checkpoint)
     metrics = trainer.evaluate()
     adapter_dir = Path(output_dir) / "adapter"
     adapter_dir.mkdir(parents=True, exist_ok=True)
@@ -221,6 +266,11 @@ def main() -> None:
     t.add_argument("--data-dir", default="data/en_it_v1")
     t.add_argument("--output-dir", default="artifacts/lora/en_it_v1")
     t.add_argument("--model-name", default="facebook/nllb-200-distilled-600M")
+    t.add_argument("--train-batch-size", type=int, default=8)
+    t.add_argument("--eval-batch-size", type=int, default=8)
+    t.add_argument("--gradient-accumulation-steps", type=int, default=1)
+    t.add_argument("--max-length", type=int, default=192)
+    t.add_argument("--resume-from-checkpoint", default=None)
 
     e = sub.add_parser("export-lora")
     e.add_argument("--base-model", default="facebook/nllb-200-distilled-600M")
@@ -234,7 +284,16 @@ def main() -> None:
     elif args.command == "prepare-data":
         prepare_data(args.out_dir, args.seed, args.val_ratio, args.test_ratio, args.max_per_corpus)
     elif args.command == "train-lora":
-        train_lora(args.data_dir, args.output_dir, args.model_name)
+        train_lora(
+            args.data_dir,
+            args.output_dir,
+            args.model_name,
+            args.train_batch_size,
+            args.eval_batch_size,
+            args.gradient_accumulation_steps,
+            args.max_length,
+            args.resume_from_checkpoint,
+        )
     else:
         export_lora(args.base_model, args.adapter_dir, args.output_dir, args.quantization)
 
