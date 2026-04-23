@@ -50,11 +50,30 @@ MAX_DECODE = 256
 INTER_THREADS = 8
 
 
+def _ct2_device() -> tuple[str, int]:
+    """Inference device: default cpu. Set NMT_DEVICE=cuda for GPU (requires CUDA build of ctranslate2)."""
+    device = os.environ.get("NMT_DEVICE", "cpu").strip().lower() or "cpu"
+    try:
+        idx = int(os.environ.get("NMT_DEVICE_INDEX", "0"))
+    except ValueError:
+        idx = 0
+    return device, idx
+
+
 def load_translator(model_dir: str) -> ctranslate2.Translator:
-    log.info("Loading CTranslate2 from %r ...", model_dir)
+    device, device_index = _ct2_device()
+    log.info("Loading CTranslate2 from %r device=%s index=%s ...", model_dir, device, device_index)
+    if device == "cpu":
+        return ctranslate2.Translator(
+            model_dir,
+            device=device,
+            inter_threads=INTER_THREADS,
+            intra_threads=0,
+        )
     return ctranslate2.Translator(
         model_dir,
-        device="cpu",
+        device=device,
+        device_index=device_index,
         inter_threads=INTER_THREADS,
         intra_threads=0,
     )
@@ -218,7 +237,7 @@ def main() -> None:
     p.add_argument("--port", type=int, default=18080, help="TCP port")
     p.add_argument(
         "--model-dir",
-        default="nllb_int8",
+        default="artifacts/ct2/en_it_v4_casual_weighted/model",
         help="Path to CTranslate2 model directory (relative to cwd or absolute)",
     )
     p.add_argument(

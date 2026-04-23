@@ -168,8 +168,8 @@ int main() {
 
   thread([&]() {
     try {
-      auto eng = make_unique<NMT::NMTWrapper>("nllb_int8",
-                                              "nllb_int8/sentencepiece.bpe.model");
+      auto eng = make_unique<NMT::NMTWrapper>("artifacts/ct2/en_it_v4_casual_weighted/model",
+                                              "artifacts/ct2/en_it_v4_casual_weighted/model/sentencepiece.bpe.model");
       // One warmup decode so the first real client pays less JIT/cache cost.
       (void)eng->translate("Hi");
       lock_guard<mutex> lock(engine_mutex);

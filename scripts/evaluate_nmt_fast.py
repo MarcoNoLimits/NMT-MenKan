@@ -28,14 +28,31 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(
 FLORES_URL = "https://dl.fbaipublicfiles.com/nllb/flores200_dataset.tar.gz"
 
 
-def load_model(model_dir: str, inter_threads: int) -> ctranslate2.Translator:
-    logging.info(f"Loading CTranslate2 model from '{model_dir}' ...")
-    translator = ctranslate2.Translator(
-        model_dir,
-        device="cpu",
-        inter_threads=inter_threads,   # parallelism across batches
-        intra_threads=0,               # let CTranslate2 auto-detect per-op threads
-    )
+def load_model(model_dir: str, inter_threads: int, device: str | None = None, device_index: int | None = None) -> ctranslate2.Translator:
+    dev = (device or os.environ.get("NMT_DEVICE", "cpu")).strip().lower() or "cpu"
+    if device_index is None:
+        try:
+            idx = int(os.environ.get("NMT_DEVICE_INDEX", "0"))
+        except ValueError:
+            idx = 0
+    else:
+        idx = device_index
+    logging.info("Loading CTranslate2 model from '%s' (device=%s index=%s) ...", model_dir, dev, idx)
+    if dev == "cpu":
+        translator = ctranslate2.Translator(
+            model_dir,
+            device=dev,
+            inter_threads=inter_threads,
+            intra_threads=0,
+        )
+    else:
+        translator = ctranslate2.Translator(
+            model_dir,
+            device=dev,
+            device_index=idx,
+            inter_threads=inter_threads,
+            intra_threads=0,
+        )
     logging.info("Model loaded.")
     return translator
 
@@ -123,7 +140,17 @@ def ensure_flores_cache() -> str:
 
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Fast BLEU/chrF evaluator for En<->It.")
-    p.add_argument("--model-dir", default="nllb_int8")
+    p.add_argument(
+        "--model-dir",
+        default="artifacts/ct2/en_it_v4_casual_weighted/model",
+        help="Path to converted CT2 model",
+    )
+    p.add_argument(
+        "--device",
+        default=None,
+        help="CTranslate2 device (default: env NMT_DEVICE or cpu). Use cuda for GPU inference.",
+    )
+    p.add_argument("--device-index", type=int, default=None, help="GPU index when device is cuda (default: env NMT_DEVICE_INDEX or 0).")
     p.add_argument("--spm-model", default=None, help="Default: <model-dir>/sentencepiece.bpe.model")
     p.add_argument("--source-lang", default=DEFAULT_SRC_LANG)
     p.add_argument("--target-lang", default=DEFAULT_TGT_LANG)
@@ -146,7 +173,7 @@ def main() -> None:
     if not os.path.isfile(spm_model):
         raise FileNotFoundError(f"SentencePiece model not found: {spm_model}")
 
-    translator = load_model(model_dir, args.inter_threads)
+    translator = load_model(model_dir, args.inter_threads, device=args.device, device_index=args.device_index)
     sp = load_spm(spm_model)
     flores_cache = ensure_flores_cache()
 

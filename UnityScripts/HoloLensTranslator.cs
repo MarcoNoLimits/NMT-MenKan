@@ -22,9 +22,9 @@ public class HoloLensTranslator : MonoBehaviour
 
     void Start()
     {
-        // For HoloLens, you should place your "nllb_int8" folder inside the Unity StreamingAssets folder.
+        // For HoloLens, you should place your "en_it_v4_casual_weighted" folder inside the Unity StreamingAssets folder.
         // This ensures the files are copied to the headset during the build.
-        string modelPath = Path.Combine(Application.streamingAssetsPath, "nllb_int8");
+        string modelPath = Path.Combine(Application.streamingAssetsPath, "en_it_v4_casual_weighted");
         
         Debug.Log($"[NMT] Initializing Neural Machine Translation model at {modelPath}...");
         

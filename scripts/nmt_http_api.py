@@ -72,7 +72,7 @@ def _resolve_model_paths() -> tuple[str, str, str]:
     model_variant = os.getenv("MODEL_VARIANT", "base").strip() or "base"
     variants_json = os.getenv("MODEL_VARIANTS_JSON", "").strip()
     if not variants_json:
-        model_dir = os.getenv("MODEL_DIR", "nllb_int8")
+        model_dir = os.getenv("MODEL_DIR", "artifacts/ct2/en_it_v4_casual_weighted/model")
         spm_path = os.getenv("SPM_PATH", os.path.join(model_dir, "sentencepiece.bpe.model"))
         return model_variant, model_dir, spm_path
 
