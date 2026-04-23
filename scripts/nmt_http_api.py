@@ -8,8 +8,17 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 from scripts.nmt_tcp_server import (
@@ -28,19 +37,11 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
-
-def _read_env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, str(default)).strip()
-    try:
-        return int(raw)
-    except ValueError as exc:
-        raise RuntimeError(f"Environment variable {name} must be an integer") from exc
-
-
-def _read_env_bool(name: str, default: bool) -> bool:
-    raw = os.getenv(name, "1" if default else "0").strip().lower()
-    return raw in {"1", "true", "yes", "on"}
-
+_TRANSLATE_HINT = (
+    'Send English in JSON: {"text":"Your sentence here"} with '
+    "Content-Type: application/json. Alternatives: form field `text`, "
+    "raw text/plain body, or GET /translate?text=..."
+)
 
 @dataclass
 class AppState:
@@ -66,6 +67,19 @@ class TranslateResponse(BaseModel):
     source_lang: str
     target_lang: str
     model_variant: str
+
+
+def _read_env_int(name: str, default: int) -> int:
+    raw = os.getenv(name, str(default)).strip()
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise RuntimeError(f"Environment variable {name} must be an integer") from exc
+
+
+def _read_env_bool(name: str, default: bool) -> bool:
+    raw = os.getenv(name, "1" if default else "0").strip().lower()
+    return raw in {"1", "true", "yes", "on"}
 
 
 def _resolve_model_paths() -> tuple[str, str, str]:
@@ -133,36 +147,62 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="NMT MenKan HTTP API", lifespan=lifespan)
 
 
+@app.exception_handler(RequestValidationError)
+async def request_validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "error": "validation_error",
+            "detail": exc.errors(),
+            "hint": _TRANSLATE_HINT,
+        },
+    )
+
+
 def _require_api_key(header_key: str | None, expected_key: str | None) -> None:
     if not expected_key or not header_key or header_key != expected_key:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
 
-@app.get("/healthz")
-def healthz() -> dict[str, str]:
-    return {"status": "ok"}
+async def _extract_payload(request: Request) -> TranslateRequest:
+    raw_ct = request.headers.get("content-type") or ""
+    ct = raw_ct.split(";")[0].strip().lower()
+
+    if ct in ("application/json", "") or "application/json" in raw_ct:
+        try:
+            body = await request.json()
+        except json.JSONDecodeError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail={"error": "invalid_json", "message": str(exc), "hint": _TRANSLATE_HINT}
+            ) from exc
+        return TranslateRequest(**body)
+
+    if ct in ("application/x-www-form-urlencoded", "multipart/form-data"):
+        form = await request.form()
+        return TranslateRequest(
+            text=form.get("text", ""),
+            source_lang=form.get("source_lang", DEFAULT_SRC_LANG),
+            target_lang=form.get("target_lang", DEFAULT_TGT_LANG)
+        )
+
+    if ct == "text/plain":
+        raw = (await request.body()).decode("utf-8", errors="replace").strip()
+        return TranslateRequest(text=raw)
+
+    raise HTTPException(
+        status_code=415,
+        detail={"error": "unsupported_media_type", "content_type": raw_ct, "hint": _TRANSLATE_HINT}
+    )
 
 
-@app.post("/translate", response_model=TranslateResponse)
-async def translate(
-    request: Request,
-    payload: TranslateRequest,
-    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
-) -> TranslateResponse:
-    state: AppState = request.app.state.nmt
-    request_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
-
-    if state.require_api_key:
-        _require_api_key(x_api_key, state.api_key)
-
+async def _translate_core(state: AppState, payload: TranslateRequest, request_id: str) -> TranslateResponse:
     text = payload.text.strip()
     if not text:
-        raise HTTPException(status_code=400, detail="Text must not be empty")
+        raise HTTPException(status_code=400, detail={"error": "empty_text", "hint": _TRANSLATE_HINT})
     if len(text) > state.max_chars:
-        raise HTTPException(
-            status_code=413,
-            detail=f"Input exceeds MAX_INPUT_CHARS={state.max_chars}",
-        )
+        raise HTTPException(status_code=413, detail=f"Input exceeds MAX_INPUT_CHARS={state.max_chars}")
+
     source_lang = payload.source_lang.strip()
     target_lang = payload.target_lang.strip()
     try:
@@ -170,22 +210,14 @@ async def translate(
     except ValueError as exc:
         raise HTTPException(
             status_code=400,
-            detail=(
-                f"{exc}. Supported pairs: "
-                f"{', '.join([f'{s}->{t}' for s, t in sorted(SUPPORTED_PAIRS)])}"
-            ),
+            detail=f"{exc}. Supported pairs: {', '.join([f'{s}->{t}' for s, t in sorted(SUPPORTED_PAIRS)])}"
         ) from exc
 
     start = time.perf_counter()
     try:
         translation = await asyncio.wait_for(
             asyncio.to_thread(
-                translate_one,
-                state.translator,
-                state.sentencepiece,
-                text,
-                source_lang,
-                target_lang,
+                translate_one, state.translator, state.sentencepiece, text, source_lang, target_lang
             ),
             timeout=state.timeout_seconds,
         )
@@ -197,12 +229,8 @@ async def translate(
         raise HTTPException(status_code=500, detail="Internal server error")
 
     latency_ms = (time.perf_counter() - start) * 1000.0
-    log.info(
-        "request_id=%s status=ok chars=%d latency_ms=%.1f",
-        request_id,
-        len(text),
-        latency_ms,
-    )
+    log.info("request_id=%s status=ok chars=%d latency_ms=%.1f", request_id, len(text), latency_ms)
+    
     return TranslateResponse(
         translation=translation,
         latency_ms=round(latency_ms, 1),
@@ -211,3 +239,50 @@ async def translate(
         target_lang=target_lang,
         model_variant=state.model_variant,
     )
+
+
+@app.get("/", response_class=HTMLResponse)
+def root(request: Request) -> HTMLResponse:
+    state: AppState = request.app.state.nmt
+    path = Path(__file__).resolve().parent / "hf_space_ui.html"
+    try:
+        html = path.read_text(encoding="utf-8")
+    except OSError:
+        html = "<!DOCTYPE html><html><body><p>UI file missing.</p></body></html>"
+    html = html.replace("__INJECT_REQUIRE_API_KEY__", "true" if state.require_api_key else "false")
+    html = html.replace("__INJECT_MAX_CHARS__", str(state.max_chars))
+    return HTMLResponse(content=html)
+
+
+@app.get("/healthz")
+def healthz() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/translate", response_model=TranslateResponse)
+async def translate_get(
+    request: Request,
+    text: str,
+    source_lang: str = DEFAULT_SRC_LANG,
+    target_lang: str = DEFAULT_TGT_LANG,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> TranslateResponse:
+    state: AppState = request.app.state.nmt
+    request_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
+    if state.require_api_key:
+        _require_api_key(x_api_key, state.api_key)
+    payload = TranslateRequest(text=text, source_lang=source_lang, target_lang=target_lang)
+    return await _translate_core(state, payload, request_id)
+
+
+@app.post("/translate", response_model=TranslateResponse)
+async def translate_post(
+    request: Request,
+    x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+) -> TranslateResponse:
+    state: AppState = request.app.state.nmt
+    request_id = request.headers.get("X-Request-Id", str(uuid.uuid4()))
+    if state.require_api_key:
+        _require_api_key(x_api_key, state.api_key)
+    payload = await _extract_payload(request)
+    return await _translate_core(state, payload, request_id)
