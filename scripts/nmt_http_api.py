@@ -70,9 +70,12 @@ class TranslateResponse(BaseModel):
 
 
 def _read_env_int(name: str, default: int) -> int:
-    raw = os.getenv(name, str(default)).strip()
+    raw = os.getenv(name, str(default))
+    if raw is None or not str(raw).strip():
+        return default
+    first = str(raw).strip().splitlines()[0].strip()
     try:
-        return int(raw)
+        return int(first)
     except ValueError as exc:
         raise RuntimeError(f"Environment variable {name} must be an integer") from exc
 

@@ -45,8 +45,6 @@ SUPPORTED_PAIRS = {
     ("eng_Latn", "ita_Latn"),
     ("ita_Latn", "eng_Latn"),
 }
-BEAM_SIZE = 1
-MAX_DECODE = 256
 
 
 def _env_int(name: str, default: int) -> int:
@@ -61,8 +59,19 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_int_clamped(name: str, default: int, lo: int, hi: int) -> int:
+    v = _env_int(name, default)
+    return max(lo, min(hi, v))
+
+
+# Smaller beam = faster CPU inference; NMT_BEAM_SIZE=1 is recommended on HF CPU Spaces.
+BEAM_SIZE = _env_int_clamped("NMT_BEAM_SIZE", 1, 1, 8)
+MAX_DECODE = _env_int_clamped("NMT_MAX_DECODE", 256, 32, 1024)
+
+
 # On 2-vCPU HF Spaces: one translation slot using all available cores.
 # inter_threads > vCPU_count causes core contention and slows everything down.
+# Do not set NMT_INTRA_THREADS to 16 on a 2-vCPU machine (use 2).
 INTER_THREADS = _env_int("NMT_INTER_THREADS", 1)
 INTRA_THREADS = _env_int("NMT_INTRA_THREADS", 2)
 
@@ -112,15 +121,14 @@ def validate_lang_pair(src_lang: str, tgt_lang: str) -> None:
         )
 
 
-def translate_one(
+def _translate_single_line(
     translator: ctranslate2.Translator,
     sp: spm.SentencePieceProcessor,
-    text: str,
-    src_lang: str = DEFAULT_SRC_LANG,
-    tgt_lang: str = DEFAULT_TGT_LANG,
+    line: str,
+    src_lang: str,
+    tgt_lang: str,
 ) -> str:
-    validate_lang_pair(src_lang, tgt_lang)
-    batch_in = [tokenize_line(sp, text, src_lang)]
+    batch_in = [tokenize_line(sp, line, src_lang)]
     results = translator.translate_batch(
         batch_in,
         target_prefix=[[tgt_lang]],
@@ -132,6 +140,27 @@ def translate_one(
     if out.startswith(tgt_lang):
         out = out[len(tgt_lang) :].lstrip()
     return out
+
+
+def translate_one(
+    translator: ctranslate2.Translator,
+    sp: spm.SentencePieceProcessor,
+    text: str,
+    src_lang: str = DEFAULT_SRC_LANG,
+    tgt_lang: str = DEFAULT_TGT_LANG,
+) -> str:
+    validate_lang_pair(src_lang, tgt_lang)
+    # One long block with embedded newlines confuses the decoder and often produces a
+    # long "phrasebook" wall of text. Decode each line so latency and quality match user intent.
+    if "\n" not in text and "\r" not in text:
+        return _translate_single_line(translator, sp, text.strip(), src_lang, tgt_lang)
+    out_lines: list[str] = []
+    for part in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if not part.strip():
+            out_lines.append("")
+        else:
+            out_lines.append(_translate_single_line(translator, sp, part.strip(), src_lang, tgt_lang))
+    return "\n".join(out_lines)
 
 
 def looks_like_http(line: str) -> bool:
