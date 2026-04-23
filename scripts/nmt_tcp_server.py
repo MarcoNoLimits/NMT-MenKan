@@ -47,7 +47,10 @@ SUPPORTED_PAIRS = {
 }
 BEAM_SIZE = 1
 MAX_DECODE = 256
-INTER_THREADS = 8
+# On 2-vCPU HF Spaces: one translation slot using all available cores.
+# inter_threads > vCPU_count causes core contention and slows everything down.
+INTER_THREADS = int(os.environ.get("NMT_INTER_THREADS", "1"))
+INTRA_THREADS = int(os.environ.get("NMT_INTRA_THREADS", "2"))
 
 
 def _ct2_device() -> tuple[str, int]:
@@ -62,21 +65,18 @@ def _ct2_device() -> tuple[str, int]:
 
 def load_translator(model_dir: str) -> ctranslate2.Translator:
     device, device_index = _ct2_device()
-    log.info("Loading CTranslate2 from %r device=%s index=%s ...", model_dir, device, device_index)
-    if device == "cpu":
-        return ctranslate2.Translator(
-            model_dir,
-            device=device,
-            inter_threads=INTER_THREADS,
-            intra_threads=0,
-        )
-    return ctranslate2.Translator(
-        model_dir,
-        device=device,
-        device_index=device_index,
-        inter_threads=INTER_THREADS,
-        intra_threads=0,
+    log.info(
+        "Loading CTranslate2 from %r device=%s index=%s inter_threads=%d intra_threads=%d",
+        model_dir, device, device_index, INTER_THREADS, INTRA_THREADS,
     )
+    kwargs: dict = dict(
+        device=device,
+        inter_threads=INTER_THREADS,
+        intra_threads=INTRA_THREADS,
+    )
+    if device != "cpu":
+        kwargs["device_index"] = device_index
+    return ctranslate2.Translator(model_dir, **kwargs)
 
 
 def load_spm(path: str) -> spm.SentencePieceProcessor:
@@ -258,9 +258,6 @@ def main() -> None:
     args = p.parse_args()
     validate_lang_pair(args.src_lang, args.tgt_lang)
     spm_path = args.spm or os.path.join(args.model_dir, "sentencepiece.bpe.model")
-
-    # Optional: reduce OpenBLAS threading fights on Windows when using numpy elsewhere
-    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
 
     serve(
         args.host,

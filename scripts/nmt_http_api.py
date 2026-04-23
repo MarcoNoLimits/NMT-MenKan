@@ -113,8 +113,6 @@ async def lifespan(app: FastAPI):
     timeout_ms = _read_env_int("TRANSLATION_TIMEOUT_MS", 10000)
     timeout_seconds = max(timeout_ms / 1000.0, 0.1)
 
-    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
-
     log.info(
         "Loading model_variant=%s model_dir=%s spm_path=%s",
         model_variant,
