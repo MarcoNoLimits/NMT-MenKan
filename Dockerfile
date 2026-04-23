@@ -9,7 +9,10 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY scripts /app/scripts
-COPY artifacts/ct2/en_it_v4_casual_weighted/model /app/model
+
+# Download the CTranslate2 model from HF Hub (avoids LFS quota on the Space repo)
+RUN pip install --no-cache-dir huggingface_hub && \
+    python -c "from huggingface_hub import snapshot_download; snapshot_download('marconolimits/en-it-nmt-ct2', local_dir='/app/model')"
 
 ENV MODEL_DIR=/app/model
 ENV SPM_PATH=/app/model/sentencepiece.bpe.model
