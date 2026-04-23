@@ -30,9 +30,13 @@ venv/
 
 # Training/evaluation generated artifacts (reproducible, usually large)
 /data/
-/artifacts/
-!/artifacts/ct2/en_it_v4_casual_weighted/model/
 /reports/
+/artifacts/*
+!/artifacts/ct2/
+/artifacts/ct2/*
+!/artifacts/ct2/en_it_v4_casual_weighted/
+/artifacts/ct2/en_it_v4_casual_weighted/*
+!/artifacts/ct2/en_it_v4_casual_weighted/model/
 
 # Local dependency clone
 /vcpkg/
