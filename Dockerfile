@@ -10,10 +10,10 @@ COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY scripts /app/scripts
-COPY nllb_int8 /app/nllb_int8
+COPY artifacts/ct2/en_it_v4_casual_weighted/model /app/model
 
-ENV MODEL_DIR=/app/nllb_int8
-ENV SPM_PATH=/app/nllb_int8/sentencepiece.bpe.model
+ENV MODEL_DIR=/app/model
+ENV SPM_PATH=/app/model/sentencepiece.bpe.model
 ENV MAX_INPUT_CHARS=2000
 ENV TRANSLATION_TIMEOUT_MS=10000
 ENV REQUIRE_API_KEY=0
