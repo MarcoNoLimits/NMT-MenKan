@@ -1,0 +1,13 @@
+ctranslate2
+sentencepiece
+fastapi
+uvicorn[standard]
+python-dotenv
+sacrebleu
+datasets
+transformers
+peft
+accelerate
+evaluate
+numpy
+python-multipart

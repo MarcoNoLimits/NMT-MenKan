@@ -1,0 +1,64 @@
+# Build Headers
+/build/
+/build_log.txt
+/release_log.txt
+
+# Visual Studio
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.ups
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+
+# Dependencies
+/cmake/ctranslate2-src
+/cmake/sentencepiece-src
+
+# Model
+/nllb_int8
+
+# Local env (copy from .env.example; never commit real secrets)
+.env
+.env.local
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Local virtual environments
+.venv/
+venv/
+ENV/
+
+# Training/evaluation generated artifacts (reproducible, usually large)
+/data/
+/reports/
+/artifacts/*
+!/artifacts/ct2/
+/artifacts/ct2/*
+!/artifacts/ct2/en_it_v4_casual_weighted/
+/artifacts/ct2/en_it_v4_casual_weighted/*
+!/artifacts/ct2/en_it_v4_casual_weighted/model/
+
+# Local dependency clone
+/vcpkg/
+
+# Logs / local eval
+benchmark.log
+server_eval.log
+server_*.log
+server_*.err
+evaluation_report.txt
+build_log*.txt
+notes.txt
+
+# Binary reports
+Report/*.pdf
+Report/*.docx

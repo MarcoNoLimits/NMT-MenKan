@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NMT MenKan — Bidirectional Translator</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4d;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #34d399;
+      --err: #f87171;
+      --radius: 12px;
+      --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(1200px 600px at 20% -10%, #1e3a5f 0%, transparent 55%),
+                  radial-gradient(800px 400px at 90% 100%, #1a2744 0%, transparent 50%),
+                  var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 52rem;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+    }
+    header {
+      margin-bottom: 1.75rem;
+    }
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.35rem;
+    }
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+    .lang-selector-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    select {
+      background: #0d1218;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .swap-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0.4rem;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .swap-btn:hover {
+      color: var(--text);
+      border-color: var(--muted);
+    }
+    textarea {
+      width: 100%;
+      min-height: 7rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0d1218;
+      color: var(--text);
+      font-size: 1rem;
+      resize: vertical;
+      font-family: inherit;
+    }
+    textarea:focus {
+      outline: 2px solid rgba(59, 130, 246, 0.45);
+      border-color: var(--accent);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    button.primary {
+      appearance: none;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      font-family: inherit;
+    }
+    button.primary:hover { background: var(--accent-hover); }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    button.secondary:hover {
+      background: rgba(255,255,255,0.06);
+    }
+    .out {
+      min-height: 5.5rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 1.05rem;
+      line-height: 1.55;
+    }
+    .meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.75rem;
+    }
+    .meta span { margin-right: 1rem; }
+    .error {
+      color: var(--err);
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
+    details {
+      margin-top: 1.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    details summary { cursor: pointer; user-select: none; }
+    details code {
+      font-size: 0.8rem;
+      background: #0d1218;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+    }
+    #apiKeyRow.hidden { display: none; }
+    #apiKey {
+      width: 100%;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0d1218;
+      color: var(--text);
+      font-family: ui-monospace, monospace;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>NMT MenKan</h1>
+      <p>Bidirectional NMT · CTranslate2 · Optimized for Casual Speech</p>
+    </header>
+
+    <div class="card" id="apiKeyRow">
+      <label for="apiKey">API key</label>
+      <input type="password" id="apiKey" name="apiKey" autocomplete="off" placeholder="Paste X-API-Key if your Space requires it" />
+    </div>
+
+    <div class="card">
+      <div class="lang-selector-row">
+        <select id="sourceLang">
+          <option value="eng_Latn" selected>English</option>
+          <option value="ita_Latn">Italian</option>
+        </select>
+        <button type="button" class="swap-btn" id="swapLangs" title="Swap languages">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8v12M17 20l4-4M17 20l-4-4"/></svg>
+        </button>
+        <select id="targetLang">
+          <option value="ita_Latn" selected>Italian</option>
+          <option value="eng_Latn">English</option>
+        </select>
+      </div>
+
+      <label for="src" id="srcLabel">English</label>
+      <textarea id="src" placeholder="Type or paste text here…"></textarea>
+
+      <div class="row">
+        <button type="button" class="primary" id="go">Translate</button>
+        <button type="button" class="secondary" id="clear">Clear</button>
+        <span class="meta" id="hint"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label id="tgtLabel">Italian</label>
+      <div class="out" id="out">Translation appears here.</div>
+      <div class="meta" id="meta"></div>
+      <div class="error" id="err" hidden></div>
+    </div>
+
+    <details>
+      <summary>API reference</summary>
+      <p><code>POST /translate</code> with <code>{"text":"...", "source_lang":"eng_Latn", "target_lang":"ita_Latn"}</code></p>
+    </details>
+  </div>
+
+  <script>
+    (function () {
+      var REQUIRE = __INJECT_REQUIRE_API_KEY__;
+      var MAX = __INJECT_MAX_CHARS__;
+
+      var src = document.getElementById("src");
+      var out = document.getElementById("out");
+      var meta = document.getElementById("meta");
+      var err = document.getElementById("err");
+      var go = document.getElementById("go");
+      var clear = document.getElementById("clear");
+      var apiKeyRow = document.getElementById("apiKeyRow");
+      var apiKey = document.getElementById("apiKey");
+      var hint = document.getElementById("hint");
+      var sourceLang = document.getElementById("sourceLang");
+      var targetLang = document.getElementById("targetLang");
+      var swapLangs = document.getElementById("swapLangs");
+      var srcLabel = document.getElementById("srcLabel");
+      var tgtLabel = document.getElementById("tgtLabel");
+
+      hint.textContent = "Max ~" + MAX + " characters · Ctrl+Enter to translate";
+
+      if (!REQUIRE) {
+        apiKeyRow.classList.add("hidden");
+      }
+
+      function updateLabels() {
+        srcLabel.textContent = sourceLang.options[sourceLang.selectedIndex].text;
+        tgtLabel.textContent = targetLang.options[targetLang.selectedIndex].text;
+      }
+
+      swapLangs.addEventListener("click", function() {
+        var s = sourceLang.value;
+        sourceLang.value = targetLang.value;
+        targetLang.value = s;
+        updateLabels();
+        var tmp = src.value;
+        src.value = out.textContent === "Translation appears here." ? "" : out.textContent;
+        out.textContent = tmp || "Translation appears here.";
+      });
+
+      sourceLang.addEventListener("change", updateLabels);
+      targetLang.addEventListener("change", updateLabels);
+
+      function showError(msg) {
+        err.hidden = false;
+        err.textContent = msg;
+      }
+      function hideError() {
+        err.hidden = true;
+        err.textContent = "";
+      }
+
+      async function translate() {
+        hideError();
+        var text = (src.value || "").trim();
+        if (!text) {
+          showError("Enter some text first.");
+          return;
+        }
+        if (text.length > MAX) {
+          showError("Text is longer than the server limit (" + MAX + " characters).");
+          return;
+        }
+
+        go.disabled = true;
+        out.textContent = "Translating…";
+        meta.textContent = "";
+
+        var headers = { "Content-Type": "application/json", Accept: "application/json" };
+        var key = (apiKey.value || "").trim();
+        if (key) headers["X-API-Key"] = key;
+
+        try {
+          var res = await fetch("/translate", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+              text: text,
+              source_lang: sourceLang.value,
+              target_lang: targetLang.value
+            }),
+          });
+          var data = await res.json();
+          if (!res.ok) {
+            showError(data.detail || "Translation failed.");
+            out.textContent = "";
+            return;
+          }
+          out.textContent = data.translation || "";
+          meta.innerHTML = '<span>Latency: ' + (data.latency_ms || "—") + ' ms</span>' +
+                           '<span>Model: ' + (data.model_variant || "—") + '</span>';
+        } catch (e) {
+          showError(e.message || "Request error.");
+          out.textContent = "";
+        } finally {
+          go.disabled = false;
+        }
+      }
+
+      go.addEventListener("click", translate);
+      clear.addEventListener("click", function () {
+        src.value = "";
+        out.textContent = "Translation appears here.";
+        meta.textContent = "";
+        hideError();
+        src.focus();
+      });
+      src.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          translate();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
