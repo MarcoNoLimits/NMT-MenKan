@@ -1,3 +1,14 @@
+---
+title: NMT MenKan
+emoji: 🌐
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: En-It translation API (FastAPI + CTranslate2)
+---
+
 # NMT-MenKan
 
 **Real-Time Neural Machine Translation for HoloLens 2** *Bridging the gap for the hearing impaired through Language.*
@@ -30,6 +41,7 @@ The project name derives from **"MenKan"** (Bambara for *hear and understand*), 
   - `GET /healthz`
   - `POST /translate` with JSON `{ "text": "..." }`
 - Deployment guide: `HUGGINGFACE_SPACES.md`
+- **Integrate another app** (any stack) against the live Hugging Face URL: `HF_API_INTEGRATION.md`
 
 ---
 

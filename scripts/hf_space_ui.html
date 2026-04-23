@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NMT MenKan — English → Italian</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4d;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --success: #34d399;
+      --err: #f87171;
+      --radius: 12px;
+      --font: ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(1200px 600px at 20% -10%, #1e3a5f 0%, transparent 55%),
+                  radial-gradient(800px 400px at 90% 100%, #1a2744 0%, transparent 50%),
+                  var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.5;
+    }
+    .wrap {
+      max-width: 52rem;
+      margin: 0 auto;
+      padding: 2rem 1.25rem 3rem;
+    }
+    header {
+      margin-bottom: 1.75rem;
+    }
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin: 0 0 0.35rem;
+    }
+    header p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1.35rem;
+      margin-bottom: 1rem;
+    }
+    label {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.45rem;
+    }
+    textarea {
+      width: 100%;
+      min-height: 7rem;
+      padding: 0.75rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0d1218;
+      color: var(--text);
+      font-size: 1rem;
+      resize: vertical;
+      font-family: inherit;
+    }
+    textarea:focus {
+      outline: 2px solid rgba(59, 130, 246, 0.45);
+      border-color: var(--accent);
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      margin-top: 1rem;
+    }
+    button {
+      appearance: none;
+      border: none;
+      border-radius: 8px;
+      padding: 0.65rem 1.25rem;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--accent);
+      color: white;
+      font-family: inherit;
+    }
+    button:hover { background: var(--accent-hover); }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    button.secondary:hover {
+      background: rgba(255,255,255,0.06);
+    }
+    .out {
+      min-height: 5.5rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-size: 1.05rem;
+      line-height: 1.55;
+    }
+    .meta {
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-top: 0.75rem;
+    }
+    .meta span { margin-right: 1rem; }
+    .error {
+      color: var(--err);
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
+    details {
+      margin-top: 1.5rem;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    details summary { cursor: pointer; user-select: none; }
+    details code {
+      font-size: 0.8rem;
+      background: #0d1218;
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+    }
+    #apiKeyRow.hidden { display: none; }
+    #apiKey {
+      width: 100%;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: #0d1218;
+      color: var(--text);
+      font-family: ui-monospace, monospace;
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>NMT MenKan</h1>
+      <p>English → Italian · CTranslate2 · Same API as <code style="color:var(--muted)">POST /translate</code></p>
+    </header>
+
+    <div class="card" id="apiKeyRow">
+      <label for="apiKey">API key</label>
+      <input type="password" id="apiKey" name="apiKey" autocomplete="off" placeholder="Paste X-API-Key if your Space requires it" />
+      <p class="meta" style="margin-top:0.5rem">Stored only in this tab until you reload. Not sent anywhere except to this Space.</p>
+    </div>
+
+    <div class="card">
+      <label for="src">English</label>
+      <textarea id="src" placeholder="Type or paste English text here…"></textarea>
+      <div class="row">
+        <button type="button" id="go">Translate</button>
+        <button type="button" class="secondary" id="clear">Clear</button>
+        <span class="meta" id="hint"></span>
+      </div>
+    </div>
+
+    <div class="card">
+      <label>Italian</label>
+      <div class="out" id="out">Translation appears here.</div>
+      <div class="meta" id="meta"></div>
+      <div class="error" id="err" hidden></div>
+    </div>
+
+    <details>
+      <summary>API reference</summary>
+      <p><code>GET /healthz</code> · <code>POST /translate</code> with <code>{"text":"..."}</code> and optional <code>X-API-Key</code></p>
+      <p>See repo: <code>HF_API_INTEGRATION.md</code></p>
+    </details>
+  </div>
+
+  <script>
+    (function () {
+      var REQUIRE = __INJECT_REQUIRE_API_KEY__;
+      var MAX = __INJECT_MAX_CHARS__;
+
+      var src = document.getElementById("src");
+      var out = document.getElementById("out");
+      var meta = document.getElementById("meta");
+      var err = document.getElementById("err");
+      var go = document.getElementById("go");
+      var clear = document.getElementById("clear");
+      var apiKeyRow = document.getElementById("apiKeyRow");
+      var apiKey = document.getElementById("apiKey");
+      var hint = document.getElementById("hint");
+
+      hint.textContent = "Max ~" + MAX + " characters · Ctrl+Enter to translate";
+
+      if (!REQUIRE) {
+        apiKeyRow.classList.add("hidden");
+      }
+
+      function showError(msg) {
+        err.hidden = false;
+        err.textContent = msg;
+      }
+      function hideError() {
+        err.hidden = true;
+        err.textContent = "";
+      }
+
+      async function translate() {
+        hideError();
+        var text = (src.value || "").trim();
+        if (!text) {
+          showError("Enter some English text first.");
+          return;
+        }
+        if (text.length > MAX) {
+          showError("Text is longer than the server limit (" + MAX + " characters).");
+          return;
+        }
+        var key = (apiKey.value || "").trim();
+        if (REQUIRE && !key) {
+          showError("This Space requires an API key. Paste it above (Space Settings → Secrets → NMT_API_KEY).");
+          return;
+        }
+
+        go.disabled = true;
+        out.textContent = "Translating…";
+        meta.textContent = "";
+
+        var headers = { "Content-Type": "application/json", Accept: "application/json" };
+        if (key) headers["X-API-Key"] = key;
+
+        try {
+          var res = await fetch("/translate", {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({ text: text }),
+          });
+          var data;
+          try {
+            data = await res.json();
+          } catch (e) {
+            showError("Bad response from server.");
+            out.textContent = "";
+            return;
+          }
+          if (!res.ok) {
+            var detail = data.detail;
+            if (typeof detail === "string") showError(detail);
+            else showError(JSON.stringify(data));
+            out.textContent = "";
+            return;
+          }
+          out.textContent = data.translation || "";
+          meta.innerHTML =
+            '<span>Latency: ' +
+            (data.latency_ms != null ? data.latency_ms + " ms" : "—") +
+            "</span>" +
+            '<span>Request: ' +
+            (data.request_id || "—") +
+            "</span>";
+        } catch (e) {
+          showError(String(e.message || e));
+          out.textContent = "";
+        } finally {
+          go.disabled = false;
+        }
+      }
+
+      go.addEventListener("click", translate);
+      clear.addEventListener("click", function () {
+        src.value = "";
+        out.textContent = "Translation appears here.";
+        meta.textContent = "";
+        hideError();
+        src.focus();
+      });
+      src.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+          e.preventDefault();
+          translate();
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
