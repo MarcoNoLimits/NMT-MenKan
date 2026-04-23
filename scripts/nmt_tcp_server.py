@@ -47,19 +47,30 @@ SUPPORTED_PAIRS = {
 }
 BEAM_SIZE = 1
 MAX_DECODE = 256
+
+
+def _env_int(name: str, default: int) -> int:
+    """Parse int from env; HF Space variables are sometimes pasted with trailing newlines."""
+    raw = os.environ.get(name)
+    if raw is None or not str(raw).strip():
+        return default
+    first = str(raw).strip().splitlines()[0].strip()
+    try:
+        return int(first)
+    except ValueError:
+        return default
+
+
 # On 2-vCPU HF Spaces: one translation slot using all available cores.
 # inter_threads > vCPU_count causes core contention and slows everything down.
-INTER_THREADS = int(os.environ.get("NMT_INTER_THREADS", "1"))
-INTRA_THREADS = int(os.environ.get("NMT_INTRA_THREADS", "2"))
+INTER_THREADS = _env_int("NMT_INTER_THREADS", 1)
+INTRA_THREADS = _env_int("NMT_INTRA_THREADS", 2)
 
 
 def _ct2_device() -> tuple[str, int]:
     """Inference device: default cpu. Set NMT_DEVICE=cuda for GPU (requires CUDA build of ctranslate2)."""
     device = os.environ.get("NMT_DEVICE", "cpu").strip().lower() or "cpu"
-    try:
-        idx = int(os.environ.get("NMT_DEVICE_INDEX", "0"))
-    except ValueError:
-        idx = 0
+    idx = _env_int("NMT_DEVICE_INDEX", 0)
     return device, idx
 
 
