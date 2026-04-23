@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>NMT MenKan — English → Italian</title>
+  <title>NMT MenKan — Bidirectional Translator</title>
   <style>
     :root {
       --bg: #0f1419;
@@ -64,6 +64,37 @@
       color: var(--muted);
       margin-bottom: 0.45rem;
     }
+    .lang-selector-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1rem;
+    }
+    select {
+      background: #0d1218;
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.4rem 0.6rem;
+      font-family: inherit;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+    .swap-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0.4rem;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .swap-btn:hover {
+      color: var(--text);
+      border-color: var(--muted);
+    }
     textarea {
       width: 100%;
       min-height: 7rem;
@@ -87,7 +118,7 @@
       align-items: center;
       margin-top: 1rem;
     }
-    button {
+    button.primary {
       appearance: none;
       border: none;
       border-radius: 8px;
@@ -99,7 +130,7 @@
       color: white;
       font-family: inherit;
     }
-    button:hover { background: var(--accent-hover); }
+    button.primary:hover { background: var(--accent-hover); }
     button:disabled {
       opacity: 0.55;
       cursor: not-allowed;
@@ -108,6 +139,12 @@
       background: transparent;
       border: 1px solid var(--border);
       color: var(--text);
+      padding: 0.65rem 1.25rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
     }
     button.secondary:hover {
       background: rgba(255,255,255,0.06);
@@ -159,27 +196,41 @@
   <div class="wrap">
     <header>
       <h1>NMT MenKan</h1>
-      <p>English → Italian · CTranslate2 · Same API as <code style="color:var(--muted)">POST /translate</code></p>
+      <p>Bidirectional NMT · CTranslate2 · Optimized for Casual Speech</p>
     </header>
 
     <div class="card" id="apiKeyRow">
       <label for="apiKey">API key</label>
       <input type="password" id="apiKey" name="apiKey" autocomplete="off" placeholder="Paste X-API-Key if your Space requires it" />
-      <p class="meta" style="margin-top:0.5rem">Stored only in this tab until you reload. Not sent anywhere except to this Space.</p>
     </div>
 
     <div class="card">
-      <label for="src">English</label>
-      <textarea id="src" placeholder="Type or paste English text here…"></textarea>
+      <div class="lang-selector-row">
+        <select id="sourceLang">
+          <option value="eng_Latn" selected>English</option>
+          <option value="ita_Latn">Italian</option>
+        </select>
+        <button type="button" class="swap-btn" id="swapLangs" title="Swap languages">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M7 16V4M7 4L3 8M7 4L11 8M17 8v12M17 20l4-4M17 20l-4-4"/></svg>
+        </button>
+        <select id="targetLang">
+          <option value="ita_Latn" selected>Italian</option>
+          <option value="eng_Latn">English</option>
+        </select>
+      </div>
+
+      <label for="src" id="srcLabel">English</label>
+      <textarea id="src" placeholder="Type or paste text here…"></textarea>
+
       <div class="row">
-        <button type="button" id="go">Translate</button>
+        <button type="button" class="primary" id="go">Translate</button>
         <button type="button" class="secondary" id="clear">Clear</button>
         <span class="meta" id="hint"></span>
       </div>
     </div>
 
     <div class="card">
-      <label>Italian</label>
+      <label id="tgtLabel">Italian</label>
       <div class="out" id="out">Translation appears here.</div>
       <div class="meta" id="meta"></div>
       <div class="error" id="err" hidden></div>
@@ -187,8 +238,7 @@
 
     <details>
       <summary>API reference</summary>
-      <p><code>GET /healthz</code> · <code>POST /translate</code> with <code>{"text":"..."}</code> and optional <code>X-API-Key</code></p>
-      <p>See repo: <code>HF_API_INTEGRATION.md</code></p>
+      <p><code>POST /translate</code> with <code>{"text":"...", "source_lang":"eng_Latn", "target_lang":"ita_Latn"}</code></p>
     </details>
   </div>
 
@@ -206,12 +256,35 @@
       var apiKeyRow = document.getElementById("apiKeyRow");
       var apiKey = document.getElementById("apiKey");
       var hint = document.getElementById("hint");
+      var sourceLang = document.getElementById("sourceLang");
+      var targetLang = document.getElementById("targetLang");
+      var swapLangs = document.getElementById("swapLangs");
+      var srcLabel = document.getElementById("srcLabel");
+      var tgtLabel = document.getElementById("tgtLabel");
 
       hint.textContent = "Max ~" + MAX + " characters · Ctrl+Enter to translate";
 
       if (!REQUIRE) {
         apiKeyRow.classList.add("hidden");
       }
+
+      function updateLabels() {
+        srcLabel.textContent = sourceLang.options[sourceLang.selectedIndex].text;
+        tgtLabel.textContent = targetLang.options[targetLang.selectedIndex].text;
+      }
+
+      swapLangs.addEventListener("click", function() {
+        var s = sourceLang.value;
+        sourceLang.value = targetLang.value;
+        targetLang.value = s;
+        updateLabels();
+        var tmp = src.value;
+        src.value = out.textContent === "Translation appears here." ? "" : out.textContent;
+        out.textContent = tmp || "Translation appears here.";
+      });
+
+      sourceLang.addEventListener("change", updateLabels);
+      targetLang.addEventListener("change", updateLabels);
 
       function showError(msg) {
         err.hidden = false;
@@ -226,16 +299,11 @@
         hideError();
         var text = (src.value || "").trim();
         if (!text) {
-          showError("Enter some English text first.");
+          showError("Enter some text first.");
           return;
         }
         if (text.length > MAX) {
           showError("Text is longer than the server limit (" + MAX + " characters).");
-          return;
-        }
-        var key = (apiKey.value || "").trim();
-        if (REQUIRE && !key) {
-          showError("This Space requires an API key. Paste it above (Space Settings → Secrets → NMT_API_KEY).");
           return;
         }
 
@@ -244,39 +312,30 @@
         meta.textContent = "";
 
         var headers = { "Content-Type": "application/json", Accept: "application/json" };
+        var key = (apiKey.value || "").trim();
         if (key) headers["X-API-Key"] = key;
 
         try {
           var res = await fetch("/translate", {
             method: "POST",
             headers: headers,
-            body: JSON.stringify({ text: text }),
+            body: JSON.stringify({
+              text: text,
+              source_lang: sourceLang.value,
+              target_lang: targetLang.value
+            }),
           });
-          var data;
-          try {
-            data = await res.json();
-          } catch (e) {
-            showError("Bad response from server.");
-            out.textContent = "";
-            return;
-          }
+          var data = await res.json();
           if (!res.ok) {
-            var detail = data.detail;
-            if (typeof detail === "string") showError(detail);
-            else showError(JSON.stringify(data));
+            showError(data.detail || "Translation failed.");
             out.textContent = "";
             return;
           }
           out.textContent = data.translation || "";
-          meta.innerHTML =
-            '<span>Latency: ' +
-            (data.latency_ms != null ? data.latency_ms + " ms" : "—") +
-            "</span>" +
-            '<span>Request: ' +
-            (data.request_id || "—") +
-            "</span>";
+          meta.innerHTML = '<span>Latency: ' + (data.latency_ms || "—") + ' ms</span>' +
+                           '<span>Model: ' + (data.model_variant || "—") + '</span>';
         } catch (e) {
-          showError(String(e.message || e));
+          showError(e.message || "Request error.");
           out.textContent = "";
         } finally {
           go.disabled = false;
