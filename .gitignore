@@ -59,6 +59,14 @@ evaluation_report.txt
 build_log*.txt
 notes.txt
 
-# Binary reports
-Report/*.pdf
-Report/*.docx
+# ---------------------------------------------------------------
+# Binary / Office files — never commit these to any branch.
+# HF Spaces rejects pushes containing binaries in history.
+# ---------------------------------------------------------------
+*.pdf
+*.docx
+*.doc
+*.xlsx
+*.xls
+*.pptx
+*.ppt
