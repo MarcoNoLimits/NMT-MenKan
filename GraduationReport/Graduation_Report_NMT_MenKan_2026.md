@@ -25,7 +25,7 @@ Finally, we thank our families and friends for their support during intensive de
 
 ## ABSTRACT
 
-This project presents NMT-MenKan, a neural machine translation system designed to support speech assistance workflows in extended reality contexts for users with non-functional hearing. The final delivered system is a Python-based production HTTP API (FastAPI, Docker, Hugging Face Spaces) built on an INT8-quantized CTranslate2 model derived from Meta's NLLB-200 distilled 600M. The engineering work focused on reliable inference, language-tag-safe tokenization, deployment reproducibility, and measurable translation quality. In the benchmark-aligned FLORES-101-sized setting (1,012 sentences), model A (`marconolimits/en-it-nmt-ct2`) reports BLEU/chrF++ of 26.66/56.55 for English->Italian and 31.65/60.77 for Italian->English. Beyond metric reporting, the project also analyzes lexical-semantic behavior (e.g., idiomatic culinary mapping such as "meatballs" -> "polpette") and compares the deployed baseline against alternative model families at an architectural and word-logic level. The project demonstrates that a practical, privacy-friendly, and integration-ready translation backend can be built with open tooling while preserving a path toward real-time XR subtitle delivery.
+This project presents NMT-MenKan, a neural machine translation system designed to support speech assistance workflows in extended reality contexts for users with non-functional hearing. The final delivered system is a Python-based production HTTP API (FastAPI, Docker, Hugging Face Spaces) built on an INT8-quantized CTranslate2 model derived from Meta's NLLB-200 distilled 600M. The engineering work focused on reliable inference, language-tag-safe tokenization, deployment reproducibility, and measurable translation quality. In the benchmark-aligned FLORES-101-sized setting (1,012 sentences), model A (`marconolimits/en-it-nmt-ct2`) reports BLEU/chrF++ of 26.66/56.55 for English->Italian and 31.65/60.77 for Italian->English. Beyond metric reporting, the project also analyzes lexical-semantic behavior (e.g., idiomatic culinary mapping such as "meatballs" -> "polpette"), adds **targeted POS and register (formality) confusion matrices** on model-generated English→Italian probes, and applies **paired significance tests** (Wilcoxon, bootstrap, chi-square) so benchmark and diagnostic comparisons are supported by p-values and effect sizes, not only raw scores. The project demonstrates that a practical, privacy-friendly, and integration-ready translation backend can be built with open tooling while preserving a path toward real-time XR subtitle delivery.
 
 ---
 
@@ -132,6 +132,18 @@ For the final Python/HTTP path, translation follows a strict sequence:
 
 This strict tagging policy was essential to avoid hallucinations and unstable outputs observed during earlier development.
 
+**What happens inside the model during translation.**  
+The above API steps call a Transformer encoder-decoder model. Internally, translation proceeds as follows:
+
+1. **Subword embedding:** each SentencePiece token is mapped to a dense vector representation.
+2. **Encoder contextualization:** stacked self-attention layers build context-aware representations of the full source sentence (each token "sees" the others).
+3. **Language-conditioned start:** the forced target language tag initializes decoding so the model stays in the requested direction (EN->IT or IT->EN).
+4. **Autoregressive decoding:** the decoder predicts one target token at a time, attending both to previously generated target tokens and to encoder outputs.
+5. **Beam scoring and selection:** candidate continuations are scored; in fast inference mode we use a narrow beam (often 1) for lower latency.
+6. **Stop condition and detokenization:** generation stops at an end token; subword pieces are merged back into natural text.
+
+So the full translation path is: **validated text -> tagged subword sequence -> encoder context -> decoder token-by-token generation -> detokenized target sentence**.
+
 ### 3.3 API Design and Validation
 
 The HTTP API supports:
@@ -164,6 +176,23 @@ Key evaluation settings:
 - Batch size: 32
 - Inter-threads: 8 (in captured reports)
 - Metrics: BLEU and chrF++
+- **Statistical reporting:** sentence-level scores for significance testing are exported with `--sentence-metrics-out` (JSONL). The repository script `scripts/compute_experiment_statistics.py` runs paired tests (Wilcoxon signed-rank, paired bootstrap CIs) and categorical tests (Pearson \(\chi^2\), Fisher's exact, Cramer's \(V\)) on those outputs and on fixed confusion-matrix counts.
+
+### 3.6 Fine-Tuning Pipeline (How adaptation works)
+
+Beyond base multilingual capability, we adapted behavior with task/domain-specific supervised updates before exporting the runtime model. In practical terms, fine-tuning in this project follows this sequence:
+
+1. **Parallel data curation:** bilingual pairs are prepared/cleaned (including domain-relevant phrases such as colloquial and culinary expressions) so source and target alignments are reliable.
+2. **Tokenizer-consistent formatting:** training examples are serialized with the same NLLB language-tag convention used at inference (`source_tag -> target_tag`) to avoid train/infer mismatch.
+3. **Parameter update stage:** the NLLB-derived model is trained on the curated pairs so gradients shift weights toward the target EN<->IT distribution and domain vocabulary.
+4. **Variant packaging:** the resulting checkpoint is exported to CTranslate2 INT8 artifacts, then registered through the model-variant loader (`MODEL_VARIANT`, `MODEL_VARIANTS_JSON`) for safe serving.
+5. **Post-tuning validation:** the adapted artifact is re-evaluated with the same FLORES + lexical probe protocol, so any quality gain or regression is measured under identical decoding settings.
+
+In short, fine-tuning here is not a separate deployment path; it is a controlled adaptation stage that produces a new model variant, which then re-enters the same production translation pipeline described in §3.2.
+
+**Figure 3.1** summarizes §3.2–§3.6: **blue** denotes preprocessing, encoding, and data/formatting stages; **green** denotes decoding, model adaptation, export, and validation or response delivery.
+
+![Translation inference (top) and fine-tuning-to-serve flow (bottom). Blue: API, tokenization and tags, encoder, and data preparation. Green: decoder and response path, supervised fine-tuning, CTranslate2 INT8 export, and re-evaluation.](figures/pipeline_translation_finetune_blue_green.png)
 
 ---
 
@@ -177,7 +206,7 @@ The neural translation core was validated on **both directions** of the English�
 
 The **English and Italian sides** of the evaluation both draw from the **FLORES** multilingual parallel benchmark: aligned sentences in standard orthography, evaluated on the published **devtest** partition rather than training data [5]. To match typical **FLORES-101 model-card** reporting, **primary scores** in this report use the **1,012-sentence** devtest slice; an older **200-sentence** devtest run retained under `reports/baseline` is cited only as **historical traceability** inside the repository and is not treated as the headline benchmark.
 
-**Limitations (dataset ↔ use case).** FLORES predominantly reflects **edited, news-domain** text. It does not emulate spontaneous conversational subtitles, emotional or disfluent speech transcripts, or domain-specific dialogue unless paired with separate probing data. Large, clean **impaired-speech** or **dysarthric** corpora are especially scarce relative to mainstream read speech; even where English resources exist, comparable structured Italian resources remain limited—constraints familiar from accessibility-oriented speech work—so **benchmark gains do not automatically transfer** to every real XR subtitle scenario without further domain testing [5][7]. For that reason, this report complements FLORES metrics with **targeted lexical probes** (e.g., culinary collocations) to reveal word-level failures that BLEU and chrF++ can under-emphasize.
+**Limitations (dataset ↔ use case).** FLORES predominantly reflects **edited, news-domain** text. It does not emulate spontaneous conversational subtitles, emotional or disfluent speech transcripts, or domain-specific dialogue unless paired with separate probing data. Large, clean **impaired-speech** or **dysarthric** corpora are especially scarce relative to mainstream read speech; even where English resources exist, comparable structured Italian resources remain limited—constraints familiar from accessibility-oriented speech work—so **benchmark gains do not automatically transfer** to every real XR subtitle scenario without further domain testing [5][7]. For that reason, this report complements FLORES metrics with **targeted lexical probes** (e.g., culinary collocations) and **structured confusion summaries** (POS agreement and mock formality agreement between English intent and Italian model output on probe rows; §4.2) to reveal word-level and category-level failures that BLEU and chrF++ can under-emphasize.
 
 ### 4.2 Results
 
@@ -188,12 +217,65 @@ Primary (current) benchmark table for model **A = `marconolimits/en-it-nmt-ct2`*
 | English -> Italian (`eng_Latn -> ita_Latn`) | 1012 | 26.66 | 56.55 |
 | Italian -> English (`ita_Latn -> eng_Latn`) | 1012 | 31.65 | 60.77 |
 
+#### Statistical significance (FLORES and categorical experiments)
+
+Corpus-level scores alone do not establish whether an observed gap reflects systematic quality differences or sampling variation on a finite test set. This subsection reports **paired, sentence-aligned tests** on FLORES-200 devtest (1,012 sentences) and **categorical tests** on the 5,000-row confusion diagnostics below. All **p-values are two-sided** unless noted; significance is assessed at \(\alpha = 0.05\).
+
+**Bidirectional FLORES comparison (model A, same line index).** For each parallel line \(i\), we compared sentence-level **chrF++** (SacreBLEU `CHRF` with `word_order=2`, `beta=2`, as emitted by `evaluate_nmt_fast.py --sentence-metrics-out`) and sentence-level **smoothed BLEU** (`effective_order=True`) for Italian\(\rightarrow\)English versus English\(\rightarrow\)Italian. A **Wilcoxon signed-rank** test on paired differences rejects the null of equal paired scores with **p \(\approx 2.90 \times 10^{-34}\)** (chrF++) and **p \(\approx 5.23 \times 10^{-17}\)** (BLEU), \(N = 1{,}012\). A **paired bootstrap** (10,000 resamples) on the mean chrF++ gap yields a 95% confidence interval for \(\mathbb{E}[\mathrm{chrF^{++}}_{\mathrm{IT\to EN}} - \mathrm{chrF^{++}}_{\mathrm{EN\to IT}}]\) of approximately **[4.18, 5.70]** points (point estimate **+4.93**). **Conclusion:** Italian\(\rightarrow\)English is **significantly** stronger than English\(\rightarrow\)Italian on this benchmark under paired tests, so the headline BLEU gap (31.65 vs 26.66) is not plausibly explained by chance alone on FLORES devtest.
+
+**Categorical diagnostics (\(N = 5{,}000\) probes).** Treating expected label (POS or mock formality) and model-derived label as two factors:
+
+- **POS (4\(\times\)5 table):** Pearson \(\chi^2(12) = 10882.95\), **p \(< 10^{-300}\)** (numerical underflow to 0 in double precision), **Cramer's \(V = 0.852\)** (very large association). **Interpretation:** the distribution of the model's first-token POS depends strongly on the intended probe POS; with \(N = 5{,}000\), even small departures from independence are statistically detectable, so **effect size (Cramer's \(V\))** should be read alongside \(p\).
+- **Formality (2\(\times\)2):** Pearson \(\chi^2(1) = 1219.51\), **p \(\approx 3.51 \times 10^{-267}\)**, **Cramer's \(V = 0.494\)**; **Fisher's exact** odds ratio \(\approx 9.01\), **p \(\approx 8.26 \times 10^{-278}\)**. **Interpretation:** expected and model-inferred register are **not** independent; cross-register cells (731 and 517) reflect statistically structured behavior, not random noise.
+
+**Model A vs legacy checkpoint (§4.4.2).** Reported corpus BLEU differs only slightly (English\(\rightarrow\)Italian: 26.66 vs 26.81). To test whether that gap is significant, both systems must be decoded on the **same** references and compared with **paired** tests on sentence-level metrics (recommended: Wilcoxon + bootstrap CI via `scripts/compute_experiment_statistics.py paired-bootstrap` on two JSONL exports from `evaluate_nmt_fast.py`). **We do not quote a legacy p-value here** because a second checkpoint sentence export was not bundled with this report snapshot; the procedure above is the required way to attach a defensible \(p\)-value to that comparison.
+
+**Reproducibility.** Example commands:
+
+`python scripts/evaluate_nmt_fast.py --hf-repo marconolimits/en-it-nmt-ct2 --max-sentences 1012 --sentence-metrics-out reports/stats/model_a_en_it_1012.jsonl`
+
+`python scripts/evaluate_nmt_fast.py --hf-repo marconolimits/en-it-nmt-ct2 --source-lang ita_Latn --target-lang eng_Latn --max-sentences 1012 --sentence-metrics-out reports/stats/model_a_it_en_1012.jsonl`
+
+`python scripts/compute_experiment_statistics.py paired-directions --jsonl-en-it reports/stats/model_a_en_it_1012.jsonl --jsonl-it-en reports/stats/model_a_it_en_1012.jsonl --metric chrf`
+
+`python scripts/compute_experiment_statistics.py confusion-tables`
+
+(The `reports/` tree is gitignored; regenerate locally for identical numbers.)
+
 Historical internal baseline (older 200-sentence run, kept for traceability):
 
 | Direction | Sentences | BLEU | chrF++ |
 |---|---:|---:|---:|
 | English -> Italian (`eng_Latn -> ita_Latn`) | 200 | 27.77 | 57.36 |
 | Italian -> English (`ita_Latn -> eng_Latn`) | 200 | 33.68 | 61.15 |
+
+#### Targeted diagnostics: POS and register confusion (model A, English→Italian)
+
+Corpus BLEU/chrF++ summarize average similarity to references; they do not tabulate **which linguistic categories** fail systematically. We therefore report **confusion matrices** from `scripts/evaluate_targeted_confusion.py` on **N = 5,000** synthetic probe rows (`reports/confusion_matrices/mock_big_eval.csv`). Predictions use **`marconolimits/en-it-nmt-ct2`** via **CTranslate2** + **SentencePiece** (beam **1**, batch **32**, CPU in the captured run); spaCy tags POS on Italian columns (`it_core_news_sm`). Full procedural detail remains in §4.4.8.
+
+**(1) Part-of-speech (expected vs model first-token Italian).** Reference Italian probe words are compared to the **first surface token** of the model’s translation of each English `source_word`.
+
+![POS confusion matrix — expected vs model actual (N = 5,000, EN→IT, model A)](figures/pos_confusion_matrix_run_big.png)
+
+| Expected \\ Actual | ADJ | ADV | NOUN | PUNCT | VERB |
+|---:|---:|---:|---:|---:|---:|
+| ADJ | 495 | 0 | 965 | 0 | 0 |
+| ADV | 0 | 487 | 0 | 511 | 0 |
+| NOUN | 0 | 0 | 1,049 | 0 | 0 |
+| VERB | 0 | 0 | 0 | 0 | 1,493 |
+
+**Takeaway.** `NOUN` and `VERB` probes align with the diagonal; `ADJ` mass shifts toward **`ADJ → NOUN`** (965); `ADV` splits between **`ADV`** and **`PUNCT`** (487 vs 511), reflecting word-isolated decoding and first-token extraction limits.
+
+**(2) Mock formality (English carrier vs Italian hypothesis).** Expected register is inferred from **English** cues; actual register from **Italian** cues on the **model translation** of the same carrier sentence.
+
+![Formality confusion matrix — expected vs model actual (N = 5,000, EN→IT, model A)](figures/formality_confusion_matrix_run_big.png)
+
+| Expected \\ Actual | Formal | Informal |
+|---:|---:|---:|
+| Formal | 2,215 | 731 |
+| Informal | 517 | 1,537 |
+
+**Takeaway.** Diagonal dominance (3,752 / 5,000 under this heuristic) coexists with **non-trivial cross-register** cells (**731** + **517**), flagging register drift worth monitoring for subtitle UX.
 
 #### Qualitative observations
 
@@ -273,13 +355,66 @@ This probe shows why model **A** is preferred even when benchmark scores are onl
 
 BLEU/chrF tells us the model is globally strong; word-logic analysis tells us whether translations are locally trustworthy for real user interaction. A graduation-level evaluation should report both, and this project now does so.
 
----
+#### 4.4.6 Lexical-choice confidence visualization
+
+To complement the tables above, we generated a figure from `lexical_distribution.csv` produced by the WSD lexical-choice experiment (`scripts/wsd_lexical_choice_experiment.py`, beam top-10 candidates per prompt).  
+Weights correspond to **model A**, **[`marconolimits/en-it-nmt-ct2`](https://huggingface.co/marconolimits/en-it-nmt-ct2)**, loaded from the **workspace checkout** **`artifacts/hf/marconolimits_en_it_nmt_ct2`** (INT8 **CTranslate2** + **SentencePiece**, same stack as `scripts/evaluate_nmt_fast.py` and the HTTP API)—not a separate OPUS-MT checkpoint and not an ad hoc Hub download during this step.  
+**GPU:** CTranslate2 honors **`NMT_DEVICE=cuda`** or **`--device cuda`** when a CUDA-capable build and matching NVIDIA runtime (including **cuBLAS**, e.g. CUDA 12 for current wheels) are available; otherwise use CPU. Beam search with the same checkpoint is deterministic, so CPU vs GPU reproduces the same candidate lists. (If CUDA libraries are missing, CTranslate2 raises at load time; fall back to CPU or install the matching CUDA toolkit.)  
+**Important direction note:** this chart is **English -> Italian** lexical behavior (`eng_Latn` -> `ita_Latn`).  
+For each ambiguous English source word, the plot reports the **average top lexical-choice probability** across its English-context test cases.
+
+![Average top lexical-choice probability by ambiguous English word (EN→IT, model A, beam top-10).](figures/wsd_lexical_confidence_en_it.png)
+
+**How to read the figure (simple intuition).**
+
+- A high bar means: in English -> Italian decoding, the model repeatedly picks the same lexical choice for that ambiguous word.
+- A lower bar means: lexical choice changes more with context, so alternatives compete more often.
+
+**Small English -> Italian examples from this experiment.**
+
+- `Turn right at the next traffic light.` -> top choice `destra` (10/10): directional sense is fully stable.
+- `We sat on the bank of the river.` -> top choice `riva` (5/10): correct geo sense appears often, but verb-realization variants also compete (this reflects decoding diversity under beam analysis).
+- `Hello? This is Maria from customer support.` -> top choice `Salve` (7/10), with `Pronto` (2/10) and `Ciao` (1/10): greeting/register variants compete even in a phone-support scenario.
+- `I need this document right now.` -> mixed outputs (`subito`, `di`, `serve`, `ora`): temporal-intensity phrasing is less lexically peaked than concrete senses like direction or weather.
+
+This makes the experiment easy to interpret for non-specialist readers: the chart summarizes confidence at word level, and the examples show what that confidence looks like in actual translations. It reinforces the main methodological point of this report: sentence-level metrics (BLEU/chrF++) should be paired with lexical probes to estimate user-facing trust in assistive subtitle scenarios.
+
+#### 4.4.7 Reverse-direction lexical probe (Italian -> English)
+
+To mirror the English -> Italian analysis, we repeated the same lexical-choice protocol in the reverse direction using `test_cases_it.json` and the **same model checkpoint** **`artifacts/hf/marconolimits_en_it_nmt_ct2`** (`ita_Latn` -> `eng_Latn`), again with beam top-10 candidate analysis and empirical lexical distributions (single bilingual model; direction is selected only via language tags).
+
+![Average top lexical-choice probability by ambiguous Italian word (IT→EN, model A, beam top-10).](figures/wsd_lexical_confidence_it_en.png)
+
+**How to read this second figure.**
+
+- A high bar means the Italian source word maps to a stable English lexical choice across contexts.
+- A lower bar means lexical alternatives compete more strongly in this direction.
+
+**Small Italian -> English examples from this run.**
+
+- `Gira a destra al prossimo semaforo.` -> top choice `right` (9/10): directional sense is strongly stable.
+- `L'hotel addebiterà la carta al check-in.` -> top choice `charge` (9/10): billing sense remains strongly stable (with minor competing variants).
+- `Per favore, prenota un tavolo per due stasera.` -> `reserve` (5/10) vs `book` (3/10): two valid lexical realizations compete.
+- `Pronto? Mi senti al telefono?` -> `Hello` (8/10): phone greeting is relatively peaked, but alternatives still appear in the beam list.
+
+**Directional takeaway (EN->IT + IT->EN).**  
+Both directions show strong stability for concrete senses (e.g., `destra/right`, `banca/bank`, weather `freddo/cold`) and higher dispersion for pragmatic/social terms and command-like contexts. This bidirectional lexical evidence strengthens the report's evaluation design: combine corpus-level metrics (BLEU/chrF++) with targeted lexical-choice probes in both directions to better estimate user-facing trust in assistive subtitle scenarios.
+
+#### 4.4.8 Targeted confusion matrices (POS and formality) — methodology and reproduction
+
+**Headline figures and numeric tables** for this diagnostic appear in **§4.2** (primary Results). This subsection records **how** the matrices are produced so the evaluation stays reproducible.
+
+We ship and ran it on **N = 5,000** rows from `reports/confusion_matrices/mock_big_eval.csv`. Unless `--skip-nmt` is passed, the script **syncs model A** from Hugging Face (**[`marconolimits/en-it-nmt-ct2`](https://huggingface.co/marconolimits/en-it-nmt-ct2)**), loads **CTranslate2** + **SentencePiece** (same stack as `scripts/evaluate_nmt_fast.py`), then overwrites **`actual_target_word`** with the **first surface token** of the **EN→IT** translation of each English **`source_word`**, and **`actual_sentence`** with the **EN→IT** translation of the English carrier column (`expected_sentence` by default, or `--english-source-col`). **spaCy** (`it_core_news_sm` on Italian; `en_core_web_sm` where needed) supplies POS tags only—it does **not** perform translation.
+
+**Captured run:** beam **1**, batch **32**, **CTranslate2 `device=cpu`**. With a suitable **CUDA 12 + cuBLAS** stack matching the installed CTranslate2 wheel, **`--device cuda`** and a larger **`--batch-size`** shorten runtime without changing decoding semantics for the same checkpoint.
+
+**Interpretation notes** (expanded discussion of ADJ→NOUN, ADV→PUNCT, and cross-register cells) align with the bullets in §4.2.
 
 ## 5. CONCLUSIONS
 
 NMT-MenKan successfully delivered a working translation platform aligned with the project's accessibility objective: enabling a practical speech-assistance translation backend for XR scenarios. The final system combines a strong NLLB-derived INT8 model, reproducible evaluation, and a production Python HTTP interface.
 
-Measured FLORES-101-sized performance on model A confirms solid translation quality for both directions, with especially strong Italian -> English scores. The implemented software architecture supports immediate deployment and integration through the HTTP API.
+Measured FLORES-101-sized performance on model A confirms solid translation quality for both directions, with especially strong Italian -> English scores. **§4.2** further summarizes **POS and mock-formality confusion** on **5,000** targeted English→Italian probes, complementing BLEU/chrF++ with category-level error structure. The implemented software architecture supports immediate deployment and integration through the HTTP API.
 
 In conclusion, the project achieved its core design goals and produced a robust engineering foundation for a full assistive XR subtitle pipeline. Future work should focus on ARM64 field validation, latency profiling under realistic conversational loads, and domain-adaptive fine-tuning to better match spoken dialogue conditions. Just as importantly, future reports should continue combining benchmark metrics with lexical-semantic validation so quality claims reflect both sentence-level fluency and critical word-level correctness.
 

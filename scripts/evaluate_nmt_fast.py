@@ -16,7 +16,13 @@ from pathlib import Path
 import ctranslate2
 import sacrebleu
 import sentencepiece as spm
+from sacrebleu.metrics import BLEU, CHRF
 from tqdm import tqdm
+
+try:
+    from huggingface_hub import snapshot_download
+except ImportError:
+    snapshot_download = None  # type: ignore[misc, assignment]
 
 try:
     from scripts.nmt_tcp_server import DEFAULT_SRC_LANG, DEFAULT_TGT_LANG, validate_lang_pair
@@ -126,7 +132,10 @@ def load_flores(lang: str, max_sentences: int, flores_cache: str) -> list[str]:
 def ensure_flores_cache() -> str:
     flores_cache = os.path.join(os.environ.get("TEMP", "/tmp"), "flores200_dataset")
     flores_archive = os.path.join(os.environ.get("TEMP", "/tmp"), "flores200.tar.gz")
-    if not os.path.isdir(flores_cache):
+    devtest_ok = os.path.isfile(os.path.join(flores_cache, "devtest", "eng_Latn.devtest"))
+    if not os.path.isdir(flores_cache) or not devtest_ok:
+        if os.path.isdir(flores_cache) and not devtest_ok:
+            logging.warning("FLORES cache at %s is incomplete; re-downloading.", flores_cache)
         logging.info("Downloading flores200 from %s ...", FLORES_URL)
         urllib.request.urlretrieve(FLORES_URL, flores_archive)
         logging.info("Extracting...")
@@ -135,6 +144,20 @@ def ensure_flores_cache() -> str:
         logging.info("Done.")
     else:
         logging.info("Using cached flores200 at %s", flores_cache)
+    return flores_cache
+
+
+def resolve_flores_root(flores_cache: str) -> str:
+    """Return the directory whose child is `devtest/` containing FLORES language files."""
+    if os.path.isfile(os.path.join(flores_cache, "devtest", "eng_Latn.devtest")):
+        return flores_cache
+    for root, dirs, _files in os.walk(flores_cache):
+        if "devtest" not in dirs:
+            continue
+        dt = os.path.join(root, "devtest")
+        if os.path.isfile(os.path.join(dt, "eng_Latn.devtest")):
+            logging.info("Resolved FLORES devtest under %s", root)
+            return root
     return flores_cache
 
 
@@ -159,13 +182,37 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--inter-threads", type=int, default=8)
     p.add_argument("--beam-size", type=int, default=1)
     p.add_argument("--reports-dir", default="reports/baseline")
+    p.add_argument(
+        "--sentence-metrics-out",
+        default=None,
+        help="Optional path to write JSONL with per-sentence chrF++ and smoothed sentence BLEU for statistics.",
+    )
+    p.add_argument(
+        "--hf-repo",
+        default=None,
+        metavar="REPO_ID",
+        help="If set, download/sync this Hugging Face CTranslate2 repo and use it as --model-dir (overrides --model-dir).",
+    )
+    p.add_argument(
+        "--hf-cache-dir",
+        default=None,
+        help="Cache directory for --hf-repo snapshot_download (default: env HF_HOME or ./.hf_cache).",
+    )
     return p.parse_args()
+
+
+def resolve_hf_repo_model_dir(repo_id: str, cache_dir: str | None) -> str:
+    if snapshot_download is None:
+        raise RuntimeError("huggingface_hub is required for --hf-repo (pip install huggingface_hub).")
+    cd = cache_dir or os.environ.get("HF_HOME") or os.path.join(os.getcwd(), ".hf_cache")
+    root = snapshot_download(repo_id=repo_id, cache_dir=cd)
+    return root
 
 
 def main() -> None:
     args = parse_args()
     validate_lang_pair(args.source_lang, args.target_lang)
-    model_dir = args.model_dir
+    model_dir = resolve_hf_repo_model_dir(args.hf_repo, args.hf_cache_dir) if args.hf_repo else args.model_dir
     spm_model = args.spm_model or os.path.join(model_dir, "sentencepiece.bpe.model")
 
     if not os.path.isdir(model_dir):
@@ -175,7 +222,7 @@ def main() -> None:
 
     translator = load_model(model_dir, args.inter_threads, device=args.device, device_index=args.device_index)
     sp = load_spm(spm_model)
-    flores_cache = ensure_flores_cache()
+    flores_cache = resolve_flores_root(ensure_flores_cache())
 
     source_sentences = load_flores(args.source_lang, args.max_sentences, flores_cache)
     target_references = load_flores(args.target_lang, args.max_sentences, flores_cache)
@@ -201,6 +248,25 @@ def main() -> None:
 
     logging.info("BLEU Score  : %.2f", bleu.score)
     logging.info("chrF++ Score: %.2f", chrf.score)
+
+    if args.sentence_metrics_out:
+        chrf_metric = CHRF(word_order=2, beta=2)
+        bleu_metric = BLEU(effective_order=True)
+        out_path = Path(args.sentence_metrics_out)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with out_path.open("w", encoding="utf-8") as jf:
+            for i, (hyp, ref) in enumerate(zip(predictions, target_references)):
+                s_chrf = float(chrf_metric.sentence_score(hyp, [ref]).score)
+                s_bleu = float(bleu_metric.sentence_score(hyp, [ref]).score)
+                rec = {
+                    "i": i,
+                    "source_lang": args.source_lang,
+                    "target_lang": args.target_lang,
+                    "chrf": s_chrf,
+                    "bleu": s_bleu,
+                }
+                jf.write(json.dumps(rec) + "\n")
+        logging.info("Wrote sentence-level metrics for %d lines to %s", total, out_path)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     pair_name = f"{args.source_lang}_to_{args.target_lang}"

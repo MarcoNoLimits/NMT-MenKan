@@ -1,5 +1,6 @@
 ctranslate2
 sentencepiece
+huggingface_hub
 fastapi
 uvicorn[standard]
 python-dotenv
@@ -10,4 +11,8 @@ peft
 accelerate
 evaluate
 numpy
+scipy
 python-multipart
+huggingface_hub
+pandas
+matplotlib

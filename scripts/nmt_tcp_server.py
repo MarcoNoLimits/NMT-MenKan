@@ -23,11 +23,14 @@ Or:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import socket
 import sys
 import time
+import urllib.parse
 from typing import TYPE_CHECKING
 
 import ctranslate2
@@ -47,10 +50,9 @@ SUPPORTED_PAIRS = {
 }
 BEAM_SIZE = 1
 MAX_DECODE = 256
-# On 2-vCPU HF Spaces: one translation slot using all available cores.
 # inter_threads > vCPU_count causes core contention and slows everything down.
 INTER_THREADS = int(os.environ.get("NMT_INTER_THREADS", "1"))
-INTRA_THREADS = int(os.environ.get("NMT_INTRA_THREADS", "2"))
+INTRA_THREADS = int(os.environ.get("NMT_INTRA_THREADS", "0"))
 
 
 def _ct2_device() -> tuple[str, int]:
@@ -149,18 +151,72 @@ def recv_line(conn: socket.socket, max_len: int = 256 * 1024) -> bytes:
     return bytes(buf)
 
 
-def send_http_400(conn: socket.socket) -> None:
-    body = (
-        "This port is the Python NMT server (raw UTF-8 lines), not HTTP.\r\n"
-    ).encode("utf-8")
+def recv_http_request(conn: socket.socket, initial_bytes: bytes) -> tuple[str, dict[str, str], bytes]:
+    # Read until headers end (\r\n\r\n or \n\n)
+    data = initial_bytes
+    while b"\r\n\r\n" not in data and b"\n\n" not in data:
+        try:
+            chunk = conn.recv(4096)
+        except Exception:
+            break
+        if not chunk:
+            break
+        data += chunk
+    
+    # Split headers and body
+    if b"\r\n\r\n" in data:
+        headers_part, body_part = data.split(b"\r\n\r\n", 1)
+    elif b"\n\n" in data:
+        headers_part, body_part = data.split(b"\n\n", 1)
+    else:
+        headers_part = data
+        body_part = b""
+        
+    lines = headers_part.decode("utf-8", errors="replace").splitlines()
+    if not lines:
+        return "", {}, b""
+        
+    req_line = lines[0]
+    headers = {}
+    for line in lines[1:]:
+        if ":" in line:
+            k, v = line.split(":", 1)
+            headers[k.strip().lower()] = v.strip()
+            
+    # Read the rest of the body based on Content-Length
+    try:
+        content_length = int(headers.get("content-length", "0"))
+    except ValueError:
+        content_length = 0
+
+    while len(body_part) < content_length:
+        try:
+            chunk = conn.recv(4096)
+        except Exception:
+            break
+        if not chunk:
+            break
+        body_part += chunk
+        
+    if len(body_part) > content_length:
+        body_part = body_part[:content_length]
+        
+    return req_line, headers, body_part
+
+
+def send_http_response(conn: socket.socket, status_code: int, status_text: str, content_type: str, body: bytes) -> None:
     hdr = (
-        "HTTP/1.1 400 Bad Request\r\n"
-        "Content-Type: text/plain; charset=utf-8\r\n"
+        f"HTTP/1.1 {status_code} {status_text}\r\n"
+        f"Content-Type: {content_type}\r\n"
         f"Content-Length: {len(body)}\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
         "Connection: close\r\n"
         "\r\n"
     ).encode("ascii")
-    conn.sendall(hdr + body)
+    try:
+        conn.sendall(hdr + body)
+    except Exception as e:
+        log.warning("Failed to send HTTP response: %s", e)
 
 
 def serve(
@@ -209,8 +265,90 @@ def serve(
             log.info("Received from %s: %s", addr, line[:200])
 
             if looks_like_http(line):
-                log.warning("Ignoring HTTP request")
-                send_http_400(conn)
+                log.info("Handling HTTP request tolerantly on TCP port")
+                req_line, headers, body_part = recv_http_request(conn, raw)
+                
+                parts = req_line.split()
+                if len(parts) < 2:
+                    send_http_response(conn, 400, "Bad Request", "text/plain; charset=utf-8", b"Invalid HTTP request line")
+                    continue
+                    
+                method = parts[0].upper()
+                url_path = parts[1]
+                
+                parsed_url = urllib.parse.urlparse(url_path)
+                params = urllib.parse.parse_qs(parsed_url.query)
+                
+                text = ""
+                src_lang = default_src_lang
+                tgt_lang = default_tgt_lang
+                
+                if method == "GET":
+                    text = params.get("text", [""])[0]
+                    src_lang = params.get("source_lang", [default_src_lang])[0]
+                    tgt_lang = params.get("target_lang", [default_tgt_lang])[0]
+                elif method == "POST":
+                    ct = headers.get("content-type", "").lower()
+                    if "application/json" in ct:
+                        try:
+                            body_json = json.loads(body_part.decode("utf-8", errors="replace"))
+                            text = body_json.get("text", "")
+                            src_lang = body_json.get("source_lang", default_src_lang)
+                            tgt_lang = body_json.get("target_lang", default_tgt_lang)
+                        except Exception as e:
+                            log.warning("Failed to parse HTTP JSON body: %s", e)
+                    elif "application/x-www-form-urlencoded" in ct:
+                        try:
+                            body_str = body_part.decode("utf-8", errors="replace")
+                            body_params = urllib.parse.parse_qs(body_str)
+                            text = body_params.get("text", [""])[0]
+                            src_lang = body_params.get("source_lang", [default_src_lang])[0]
+                            tgt_lang = body_params.get("target_lang", [default_tgt_lang])[0]
+                        except Exception as e:
+                            log.warning("Failed to parse HTTP form body: %s", e)
+                    else:
+                        text = body_part.decode("utf-8", errors="replace").strip()
+                        if not text:
+                            text = params.get("text", [""])[0]
+                            src_lang = params.get("source_lang", [default_src_lang])[0]
+                            tgt_lang = params.get("target_lang", [default_tgt_lang])[0]
+                
+                if not text:
+                    if parsed_url.path in ("/", "/healthz"):
+                        send_http_response(conn, 200, "OK", "application/json; charset=utf-8", b'{"status":"ok"}')
+                    else:
+                        send_http_response(conn, 400, "Bad Request", "text/plain; charset=utf-8", b"Missing 'text' parameter")
+                    continue
+                
+                try:
+                    validate_lang_pair(src_lang, tgt_lang)
+                except ValueError as exc:
+                    send_http_response(conn, 400, "Bad Request", "text/plain; charset=utf-8", str(exc).encode("utf-8"))
+                    continue
+                    
+                t0_http = time.perf_counter()
+                translated = translate_one(
+                    translator,
+                    sp,
+                    text,
+                    src_lang=src_lang,
+                    tgt_lang=tgt_lang,
+                )
+                ms_http = (time.perf_counter() - t0_http) * 1000.0
+                log.info("HTTP request translated in %.1f ms", ms_http)
+                
+                accept = headers.get("accept", "").lower()
+                if "application/json" in accept or "json" in url_path:
+                    resp_data = {
+                        "translation": translated,
+                        "latency_ms": round(ms_http, 1),
+                        "source_lang": src_lang,
+                        "target_lang": tgt_lang
+                    }
+                    body_bytes = json.dumps(resp_data, ensure_ascii=False).encode("utf-8")
+                    send_http_response(conn, 200, "OK", "application/json; charset=utf-8", body_bytes)
+                else:
+                    send_http_response(conn, 200, "OK", "text/plain; charset=utf-8", translated.encode("utf-8"))
                 continue
 
             t0 = time.perf_counter()

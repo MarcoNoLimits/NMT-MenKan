@@ -19,14 +19,10 @@ ENV SPM_PATH=/app/model/sentencepiece.bpe.model
 ENV MAX_INPUT_CHARS=2000
 ENV TRANSLATION_TIMEOUT_MS=30000
 ENV REQUIRE_API_KEY=0
-# --- CPU threading (2 vCPU HF Spaces) ---
-# One translation slot, both cores devoted to it.
+# --- CPU threading (utilize all available cores) ---
+# One translation slot, all available cores dynamically auto-allocated to it.
 ENV NMT_INTER_THREADS=1
-ENV NMT_INTRA_THREADS=2
-# Allow BLAS/OpenMP to use all available cores.
-ENV OPENBLAS_NUM_THREADS=2
-ENV OMP_NUM_THREADS=2
-ENV MKL_NUM_THREADS=2
+ENV NMT_INTRA_THREADS=0
 
 EXPOSE 7860
 
