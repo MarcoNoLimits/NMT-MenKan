@@ -1,0 +1,34 @@
+[
+  { "case_id": "ciao_formale_01", "sentence": "Salve, Professore Rossi. E un piacere conoscerla.", "ambiguous_word": "salve", "choice_candidates": ["Hello", "Hi"] },
+  { "case_id": "ciao_amici_01", "sentence": "Ciao ragazzi, cosa fate stasera?", "ambiguous_word": "ciao", "choice_candidates": ["Hi", "Hello", "Hey"] },
+  { "case_id": "pronto_telefono_01", "sentence": "Pronto? Mi senti al telefono?", "ambiguous_word": "pronto", "choice_candidates": ["Hello", "Hi"] },
+
+  { "case_id": "destra_direzione_01", "sentence": "Gira a destra al prossimo semaforo.", "ambiguous_word": "destra", "choice_candidates": ["right", "correct"] },
+  { "case_id": "giusto_corretto_01", "sentence": "Hai ragione sulla scadenza.", "ambiguous_word": "ragione", "choice_candidates": ["right", "correct"] },
+  { "case_id": "subito_tempo_01", "sentence": "Mi serve questo documento subito.", "ambiguous_word": "subito", "choice_candidates": ["now", "right away"] },
+
+  { "case_id": "leggero_peso_01", "sentence": "Questo portatile e molto leggero e facile da trasportare.", "ambiguous_word": "leggero", "choice_candidates": ["light", "lightweight"] },
+  { "case_id": "luce_brightness_01", "sentence": "Accendi la luce in cucina, per favore.", "ambiguous_word": "luce", "choice_candidates": ["light", "lamp"] },
+  { "case_id": "chiaro_colore_01", "sentence": "Indossa una giacca azzurra chiara.", "ambiguous_word": "chiara", "choice_candidates": ["light", "pale"] },
+
+  { "case_id": "caricare_batteria_01", "sentence": "Devo caricare il telefono prima di uscire.", "ambiguous_word": "caricare", "choice_candidates": ["charge", "recharge"] },
+  { "case_id": "addebitare_costo_01", "sentence": "L'hotel addebiterà la carta al check-in.", "ambiguous_word": "addebiterà", "choice_candidates": ["charge", "bill"] },
+  { "case_id": "caricare_attacco_01", "sentence": "I soldati caricano all'alba.", "ambiguous_word": "caricano", "choice_candidates": ["charge", "attack"] },
+
+  { "case_id": "banca_finanza_01", "sentence": "Devo andare in banca ad aprire un conto.", "ambiguous_word": "banca", "choice_candidates": ["bank"] },
+  { "case_id": "riva_fiume_01", "sentence": "Ci siamo seduti sulla riva del fiume.", "ambiguous_word": "riva", "choice_candidates": ["bank", "shore"] },
+
+  { "case_id": "libro_nome_01", "sentence": "Ho comprato un libro di storia italiana.", "ambiguous_word": "libro", "choice_candidates": ["book"] },
+  { "case_id": "prenotare_verbo_01", "sentence": "Per favore, prenota un tavolo per due stasera.", "ambiguous_word": "prenota", "choice_candidates": ["book", "reserve"] },
+
+  { "case_id": "significa_mean_01", "sentence": "Che cosa significa questo simbolo?", "ambiguous_word": "significa", "choice_candidates": ["mean"] },
+  { "case_id": "media_average_01", "sentence": "Il valore medio del campione e 42.", "ambiguous_word": "medio", "choice_candidates": ["mean", "average"] },
+
+  { "case_id": "freddo_tempo_01", "sentence": "Fa molto freddo questa mattina.", "ambiguous_word": "freddo", "choice_candidates": ["cold"] },
+  { "case_id": "raffreddore_malattia_01", "sentence": "Sono rimasto a casa perche ho il raffreddore.", "ambiguous_word": "raffreddore", "choice_candidates": ["cold"] },
+  { "case_id": "fredda_personalita_01", "sentence": "La sua risposta sembrava fredda e distante.", "ambiguous_word": "fredda", "choice_candidates": ["cold"] },
+
+  { "case_id": "corro_movimento_01", "sentence": "Corro ogni mattina prima di colazione.", "ambiguous_word": "corro", "choice_candidates": ["run"] },
+  { "case_id": "gestisce_business_01", "sentence": "Lei gestisce un piccolo ristorante in centro.", "ambiguous_word": "gestisce", "choice_candidates": ["runs", "manages"] },
+  { "case_id": "eseguire_script_01", "sentence": "Per favore, esegui di nuovo lo script.", "ambiguous_word": "esegui", "choice_candidates": ["run", "execute"] }
+]

@@ -1,0 +1,58 @@
+[
+  { "case_id": "hello_formal_01", "sentence": "Hello, Professor Rossi. It is a pleasure to meet you.", "ambiguous_word": "hello", "choice_candidates": ["Salve", "Buongiorno", "Ciao"] },
+  { "case_id": "hello_formal_02", "sentence": "Hello, doctor. Thank you for seeing me today.", "ambiguous_word": "hello", "choice_candidates": ["Salve", "Buongiorno", "Ciao"] },
+  { "case_id": "hello_formal_03", "sentence": "Hello, Madam Chair, I appreciate your time.", "ambiguous_word": "hello", "choice_candidates": ["Salve", "Buonasera", "Ciao"] },
+  { "case_id": "hello_friendly_01", "sentence": "Hello guys, what are you doing tonight?", "ambiguous_word": "hello", "choice_candidates": ["Ciao", "Ehi", "Salve"] },
+  { "case_id": "hello_friendly_02", "sentence": "Hello Anna, long time no see!", "ambiguous_word": "hello", "choice_candidates": ["Ciao", "Ehi", "Salve"] },
+  { "case_id": "hello_friendly_03", "sentence": "Hello everyone, welcome to the party!", "ambiguous_word": "hello", "choice_candidates": ["Ciao", "Salve", "Ehi"] },
+  { "case_id": "hello_phone_01", "sentence": "Hello? Can you hear me on the phone?", "ambiguous_word": "hello", "choice_candidates": ["Pronto", "Ciao", "Salve"] },
+  { "case_id": "hello_phone_02", "sentence": "Hello? This is Maria from customer support.", "ambiguous_word": "hello", "choice_candidates": ["Pronto", "Salve", "Ciao"] },
+  { "case_id": "hello_phone_03", "sentence": "Hello? I think we got disconnected.", "ambiguous_word": "hello", "choice_candidates": ["Pronto", "Ehi", "Ciao"] },
+
+  { "case_id": "right_direction_01", "sentence": "Turn right at the next traffic light.", "ambiguous_word": "right", "choice_candidates": ["destra", "giusto", "corretto"] },
+  { "case_id": "right_direction_02", "sentence": "Keep to the right side of the road.", "ambiguous_word": "right", "choice_candidates": ["destra", "destro", "giusto"] },
+  { "case_id": "right_correct_01", "sentence": "You are right about the deadline.", "ambiguous_word": "right", "choice_candidates": ["ragione", "giusto", "destra"] },
+  { "case_id": "right_correct_02", "sentence": "That is the right answer.", "ambiguous_word": "right", "choice_candidates": ["corretta", "giusta", "destra"] },
+  { "case_id": "right_now_01", "sentence": "I need this document right now.", "ambiguous_word": "right", "choice_candidates": ["subito", "ora", "destra"] },
+
+  { "case_id": "light_weight_01", "sentence": "This laptop is very light and easy to carry.", "ambiguous_word": "light", "choice_candidates": ["leggero", "luce", "chiaro"] },
+  { "case_id": "light_weight_02", "sentence": "I prefer a light backpack for hiking.", "ambiguous_word": "light", "choice_candidates": ["leggero", "piccolo", "chiaro"] },
+  { "case_id": "light_brightness_01", "sentence": "Please turn on the light in the kitchen.", "ambiguous_word": "light", "choice_candidates": ["luce", "lampada", "leggero"] },
+  { "case_id": "light_brightness_02", "sentence": "The light from the window is beautiful.", "ambiguous_word": "light", "choice_candidates": ["luce", "chiarore", "leggero"] },
+  { "case_id": "light_color_01", "sentence": "She is wearing a light blue jacket.", "ambiguous_word": "light", "choice_candidates": ["chiaro", "leggero", "luce"] },
+
+  { "case_id": "charge_money_01", "sentence": "How much do you charge for delivery?", "ambiguous_word": "charge", "choice_candidates": ["addebiti", "costi", "caricare"] },
+  { "case_id": "charge_money_02", "sentence": "The hotel will charge your card at check-in.", "ambiguous_word": "charge", "choice_candidates": ["addebitera", "carichera", "accusera"] },
+  { "case_id": "charge_battery_01", "sentence": "I need to charge my phone before leaving.", "ambiguous_word": "charge", "choice_candidates": ["caricare", "addebitare", "ricaricare"] },
+  { "case_id": "charge_battery_02", "sentence": "Can I charge my laptop here?", "ambiguous_word": "charge", "choice_candidates": ["caricare", "ricaricare", "addebitare"] },
+  { "case_id": "charge_attack_01", "sentence": "The soldiers charge at dawn.", "ambiguous_word": "charge", "choice_candidates": ["attaccano", "caricano", "addebitano"] },
+
+  { "case_id": "bank_finance_01", "sentence": "I need to go to the bank to open an account.", "ambiguous_word": "bank", "choice_candidates": ["banca", "riva", "argine"] },
+  { "case_id": "bank_finance_02", "sentence": "The bank approved my loan request.", "ambiguous_word": "bank", "choice_candidates": ["banca", "istituto", "riva"] },
+  { "case_id": "bank_river_01", "sentence": "We sat on the bank of the river.", "ambiguous_word": "bank", "choice_candidates": ["riva", "argine", "banca"] },
+  { "case_id": "bank_river_02", "sentence": "There are flowers along the river bank.", "ambiguous_word": "bank", "choice_candidates": ["riva", "argine", "banca"] },
+
+  { "case_id": "book_noun_01", "sentence": "I bought a book about Italian history.", "ambiguous_word": "book", "choice_candidates": ["libro", "prenotare", "riservare"] },
+  { "case_id": "book_noun_02", "sentence": "This book is very difficult to understand.", "ambiguous_word": "book", "choice_candidates": ["libro", "volume", "prenotare"] },
+  { "case_id": "book_verb_01", "sentence": "Please book a table for two tonight.", "ambiguous_word": "book", "choice_candidates": ["prenotare", "riservare", "libro"] },
+  { "case_id": "book_verb_02", "sentence": "I will book the tickets online.", "ambiguous_word": "book", "choice_candidates": ["prenotare", "acquistare", "libro"] },
+
+  { "case_id": "mean_kind_01", "sentence": "He is mean to his classmates.", "ambiguous_word": "mean", "choice_candidates": ["cattivo", "scortese", "significare"] },
+  { "case_id": "mean_kind_02", "sentence": "Do not be mean to your sister.", "ambiguous_word": "mean", "choice_candidates": ["cattivo", "scortese", "medio"] },
+  { "case_id": "mean_signify_01", "sentence": "What does this symbol mean?", "ambiguous_word": "mean", "choice_candidates": ["significa", "vuol dire", "cattivo"] },
+  { "case_id": "mean_signify_02", "sentence": "I did not mean to offend you.", "ambiguous_word": "mean", "choice_candidates": ["intendevo", "volevo dire", "cattivo"] },
+  { "case_id": "mean_average_01", "sentence": "The mean value of the sample is 42.", "ambiguous_word": "mean", "choice_candidates": ["media", "valore medio", "cattivo"] },
+
+  { "case_id": "cold_weather_01", "sentence": "It is very cold this morning.", "ambiguous_word": "cold", "choice_candidates": ["freddo", "raffreddore", "gelido"] },
+  { "case_id": "cold_weather_02", "sentence": "I forgot my coat and now I feel cold.", "ambiguous_word": "cold", "choice_candidates": ["freddo", "gelido", "raffreddore"] },
+  { "case_id": "cold_illness_01", "sentence": "I stayed home because I have a cold.", "ambiguous_word": "cold", "choice_candidates": ["raffreddore", "freddo", "influenza"] },
+  { "case_id": "cold_illness_02", "sentence": "She caught a cold after the trip.", "ambiguous_word": "cold", "choice_candidates": ["raffreddore", "freddo", "malattia"] },
+  { "case_id": "cold_personality_01", "sentence": "His reply sounded cold and distant.", "ambiguous_word": "cold", "choice_candidates": ["fredda", "distaccata", "raffreddore"] },
+
+  { "case_id": "run_move_01", "sentence": "I run every morning before breakfast.", "ambiguous_word": "run", "choice_candidates": ["corro", "gestisco", "eseguo"] },
+  { "case_id": "run_move_02", "sentence": "The kids run in the park after school.", "ambiguous_word": "run", "choice_candidates": ["corrono", "scappano", "gestiscono"] },
+  { "case_id": "run_manage_01", "sentence": "She runs a small restaurant downtown.", "ambiguous_word": "runs", "choice_candidates": ["gestisce", "dirige", "corre"] },
+  { "case_id": "run_manage_02", "sentence": "They run the business together.", "ambiguous_word": "run", "choice_candidates": ["gestiscono", "dirigono", "corrono"] },
+  { "case_id": "run_execute_01", "sentence": "Please run the script again.", "ambiguous_word": "run", "choice_candidates": ["esegui", "lancia", "corri"] },
+  { "case_id": "run_execute_02", "sentence": "We need to run this experiment tonight.", "ambiguous_word": "run", "choice_candidates": ["eseguire", "fare", "correre"] }
+]

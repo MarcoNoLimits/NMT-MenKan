@@ -50,7 +50,7 @@ ENV/
 # Local dependency clone
 /vcpkg/
 
-# Logs / local eval
+# Logs / local eval / generated results
 benchmark.log
 server_eval.log
 server_*.log
@@ -58,6 +58,16 @@ server_*.err
 evaluation_report.txt
 build_log*.txt
 notes.txt
+lexical_distribution*.csv
+scripts/benchmark_tcp_results.tsv
+
+# IDEs and editors
+.cursor/
+.vscode/
+.idea/
+
+# HuggingFace cache
+.hf_cache/
 
 # ---------------------------------------------------------------
 # Binary / Office files — never commit these to any branch.
