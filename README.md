@@ -17,6 +17,8 @@ NMT-MenKan is a bidirectional English ↔ Italian translation API hosted on Hugg
 
 The name **"MenKan"** comes from Bambara for *hear and understand*.
 
+> **Part of [HoloAssist](https://github.com/MarcoNoLimits/Bootstrap)**, a HoloLens 2 app that gives people with non-functional hearing live subtitles, English ↔ Italian translation and ASL fingerspelling recognition. MenKan is its translation engine: HoloAssist sends the recognised speech here and shows the translation in the headset. Graduation project (FENS 402), Kadir Has University, 2026.
+
 ---
 
 ## Contents
